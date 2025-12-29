@@ -1,0 +1,19 @@
+<div class="daily-reading">
+	<h2>{{.date}}</h2>
+	{{ if .verses }}
+	<div class="verses">
+		{{- range .verses}}
+		<div class="verse">
+			<div class="verse-content">
+				{{.HTML | safeHTML}}
+			</div>
+		</div>
+		{{- end}}
+		{{- if (index .verses 0).Copyright }}
+		<div class="copyright">
+			{{ (index .verses 0).Copyright }}
+		</div>
+		{{- end }}
+	</div>
+	{{ end }}
+</div>

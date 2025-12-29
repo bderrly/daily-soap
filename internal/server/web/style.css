@@ -1,0 +1,82 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: linear-gradient(135deg, #6B8FA3 0%, #7A9BB3 100%);
+    color: #2C3E50;
+    min-height: 100vh;
+    padding: 2rem 1rem;
+    text-align: center;
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 12px;
+    padding: 2rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.logo {
+    width: min(20vw, 10vh);
+    height: auto;
+    aspect-ratio: 1;
+    max-width: 20vw;
+    max-height: 10vh;
+    margin: 0 auto 1.5rem;
+    display: block;
+    opacity: 0.9;
+}
+
+h1 {
+    color: #4A6FA5;
+    margin-bottom: 1rem;
+    font-size: 1.8rem;
+    font-weight: 600;
+}
+
+p {
+    color: #5A6C7D;
+    margin-bottom: 1.5rem;
+    font-size: 0.95rem;
+}
+
+.daily-reading {
+    margin-top: 2rem;
+}
+
+.daily-reading h2 {
+    color: #4A6FA5;
+    margin-bottom: 1.5rem;
+    font-size: 1.4rem;
+    font-weight: 500;
+}
+
+.verses {
+    list-style: none;
+    text-align: center;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.verses li {
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.75rem;
+    background: #F5F7FA;
+    border-left: 3px solid #6B8FA3;
+    border-radius: 4px;
+    color: #2C3E50;
+    line-height: 1.7;
+    text-align: center;
+}
+
+.verses li:last-child {
+    margin-bottom: 0;
+}
+
