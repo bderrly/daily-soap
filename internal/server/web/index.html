@@ -30,8 +30,89 @@
             <line x1="36" y1="44" x2="48" y2="44" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round"/>
         </svg>
         <h1>Moravian Texts + SOAP</h1>
-        {{ template "verses.gotmpl" . }}
+        <div class="content-wrapper">
+            <div class="verses-section">
+                {{ template "verses.gotmpl" . }}
+            </div>
+            <div class="soap-section">
+                <div class="soap-field">
+                    <label for="observation">Observation</label>
+                    <textarea id="observation" name="observation" rows="6" placeholder="What do you observe in these verses?">{{.observation}}</textarea>
+                </div>
+                <div class="soap-field">
+                    <label for="application">Application</label>
+                    <textarea id="application" name="application" rows="6" placeholder="How can you apply this to your life?">{{.application}}</textarea>
+                </div>
+                <div class="soap-field">
+                    <label for="prayer">Prayer</label>
+                    <textarea id="prayer" name="prayer" rows="6" placeholder="What is your prayer?">{{.prayer}}</textarea>
+                </div>
+                <div class="save-status" id="saveStatus"></div>
+            </div>
+        </div>
     </div>
+    <script>
+        (function() {
+            const date = "{{.date}}";
+            const observationField = document.getElementById('observation');
+            const applicationField = document.getElementById('application');
+            const prayerField = document.getElementById('prayer');
+            const saveStatus = document.getElementById('saveStatus');
+            
+            let saveTimeout = null;
+            const SAVE_DELAY = 1000; // 1 second after last change
+            
+            function saveData() {
+                const data = {
+                    date: date,
+                    observation: observationField.value,
+                    application: applicationField.value,
+                    prayer: prayerField.value
+                };
+                
+                saveStatus.textContent = 'Saving...';
+                saveStatus.className = 'save-status saving';
+                
+                fetch('/api/soap', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                })
+                .then(response => response.json())
+                .then(result => {
+                    if (result.error) {
+                        saveStatus.textContent = 'Error saving';
+                        saveStatus.className = 'save-status error';
+                    } else {
+                        saveStatus.textContent = 'Saved';
+                        saveStatus.className = 'save-status saved';
+                        setTimeout(() => {
+                            saveStatus.textContent = '';
+                            saveStatus.className = 'save-status';
+                        }, 2000);
+                    }
+                })
+                .catch(error => {
+                    saveStatus.textContent = 'Error saving';
+                    saveStatus.className = 'save-status error';
+                    console.error('Error:', error);
+                });
+            }
+            
+            function scheduleSave() {
+                if (saveTimeout) {
+                    clearTimeout(saveTimeout);
+                }
+                saveTimeout = setTimeout(saveData, SAVE_DELAY);
+            }
+            
+            observationField.addEventListener('input', scheduleSave);
+            applicationField.addEventListener('input', scheduleSave);
+            prayerField.addEventListener('input', scheduleSave);
+        })();
+    </script>
 </body>
 </html>
 

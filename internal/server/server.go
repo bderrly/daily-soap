@@ -1,6 +1,7 @@
 package server
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -10,6 +11,8 @@ import (
 	"net/url"
 	"sync"
 	"time"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 var (
@@ -17,6 +20,7 @@ var (
 	yearDataCache = make(map[string]Year)
 	cacheMutex    sync.RWMutex
 	tmpl          *template.Template
+	db            *sql.DB
 
 	// TODO: Paste your ESV API token here
 	esvAPIKey = "YOUR_KEY"
@@ -29,6 +33,11 @@ type esvAPIResponse struct {
 }
 
 func init() {
+	// Initialize database
+	if err := initDB(); err != nil {
+		slog.Error("failed to initialize database", "error", err)
+	}
+
 	// Load current year data
 	currentYear := time.Now().Format("2006")
 	if err := loadYearData(currentYear); err != nil {
@@ -55,6 +64,7 @@ func Muxer() *http.ServeMux {
 
 	mux.HandleFunc("/", handleIndex)
 	mux.HandleFunc("/verses", handleVerses)
+	mux.HandleFunc("/api/soap", handleSOAP)
 
 	// Create a subdirectory filesystem for the web directory
 	webFS, err := fs.Sub(web, "web")
@@ -94,10 +104,26 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 	// Fetch verse content from ESV API
 	verseContents := fetchVersesContent(dailyText.Verses)
 
+	// Load existing SOAP data from database
+	soapData, err := getSOAPData(today)
+	if err != nil {
+		slog.Warn("failed to load SOAP data", "date", today, "error", err)
+		// Continue with empty values if there's an error
+		soapData = &SOAPData{
+			Date:        today,
+			Observation: "",
+			Application: "",
+			Prayer:      "",
+		}
+	}
+
 	// Prepare template data
 	data := map[string]any{
-		"verses": verseContents,
-		"date":   today,
+		"verses":      verseContents,
+		"date":        today,
+		"observation": soapData.Observation,
+		"application": soapData.Application,
+		"prayer":      soapData.Prayer,
 	}
 
 	// Execute template
@@ -300,4 +326,129 @@ func fetchVersesContent(references []string) []VerseContent {
 	}
 
 	return verses
+}
+
+// initDB initializes the SQLite database and creates the necessary table.
+// The database file will be created at "journal.db" in the current directory.
+func initDB() error {
+	var err error
+	db, err = sql.Open("sqlite3", "journal.db")
+	if err != nil {
+		return fmt.Errorf("failed to open database: %w", err)
+	}
+
+	// Create the table with date as primary key
+	createTableSQL := `
+	CREATE TABLE IF NOT EXISTS journal (
+		date TEXT PRIMARY KEY,
+		observation TEXT NOT NULL,
+		application TEXT NOT NULL,
+		prayer TEXT NOT NULL,
+		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+	);`
+
+	if _, err := db.Exec(createTableSQL); err != nil {
+		return fmt.Errorf("failed to create table: %w", err)
+	}
+
+	slog.Info("database initialized successfully")
+	return nil
+}
+
+// SOAPData represents the SOAP journal entry
+type SOAPData struct {
+	Date        string `json:"date"`
+	Observation string `json:"observation"`
+	Application string `json:"application"`
+	Prayer      string `json:"prayer"`
+}
+
+// handleSOAP handles GET and POST requests for SOAP data
+func handleSOAP(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		handleGetSOAP(w, r)
+	case http.MethodPost:
+		handlePostSOAP(w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// handleGetSOAP retrieves SOAP data for a given date
+func handleGetSOAP(w http.ResponseWriter, r *http.Request) {
+	dateStr := r.URL.Query().Get("date")
+	if dateStr == "" {
+		dateStr = time.Now().Format("2006-01-02")
+	}
+
+	soapData, err := getSOAPData(dateStr)
+	if err != nil {
+		slog.Error("failed to get SOAP data", "date", dateStr, "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(soapData); err != nil {
+		slog.Error("failed to encode SOAP data", "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+}
+
+// handlePostSOAP saves SOAP data
+func handlePostSOAP(w http.ResponseWriter, r *http.Request) {
+	var soapData SOAPData
+	if err := json.NewDecoder(r.Body).Decode(&soapData); err != nil {
+		slog.Error("failed to decode SOAP data", "error", err)
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+
+	if err := saveSOAPData(&soapData); err != nil {
+		slog.Error("failed to save SOAP data", "error", err)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to save data"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+}
+
+// getSOAPData retrieves SOAP data from the database for a given date
+func getSOAPData(dateStr string) (*SOAPData, error) {
+	var soapData SOAPData
+	soapData.Date = dateStr
+
+	query := `SELECT observation, application, prayer FROM journal WHERE date = ?`
+	err := db.QueryRow(query, dateStr).Scan(&soapData.Observation, &soapData.Application, &soapData.Prayer)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// No data found, return empty values
+			return &soapData, nil
+		}
+		return nil, fmt.Errorf("failed to query SOAP data: %w", err)
+	}
+
+	return &soapData, nil
+}
+
+// saveSOAPData saves SOAP data to the database
+func saveSOAPData(soapData *SOAPData) error {
+	query := `
+		INSERT INTO journal (date, observation, application, prayer)
+		VALUES (?, ?, ?, ?)
+		ON CONFLICT(date) DO UPDATE SET
+			observation = excluded.observation,
+			application = excluded.application,
+			prayer = excluded.prayer,
+			timestamp = CURRENT_TIMESTAMP
+	`
+	_, err := db.Exec(query, soapData.Date, soapData.Observation, soapData.Application, soapData.Prayer)
+	if err != nil {
+		return fmt.Errorf("failed to save SOAP data: %w", err)
+	}
+	return nil
 }
