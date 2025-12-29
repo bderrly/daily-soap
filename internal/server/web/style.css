@@ -106,6 +106,19 @@ p {
     overflow-y: auto;
 }
 
+.selected-verses-reference {
+    margin-bottom: 1rem;
+    padding: 0.75rem 1rem;
+    background: #E8F4F8;
+    border-left: 3px solid #4A6FA5;
+    border-radius: 4px;
+    color: #2C3E50;
+    font-weight: 500;
+    font-size: 0.95rem;
+    text-align: left;
+    display: none;
+}
+
 .soap-field {
     margin-bottom: 1.5rem;
 }
@@ -155,6 +168,43 @@ p {
 
 .save-status.error {
     color: #F44336;
+}
+
+.verses-section .verse-content {
+    cursor: pointer;
+}
+
+.verses-section .verse-content:hover {
+    background-color: rgba(255, 249, 196, 0.3);
+}
+
+.verse-selected {
+    background-color: #FFF9C4 !important;
+    border-radius: 3px;
+    padding: 2px 4px;
+    cursor: pointer;
+}
+
+.verse-content .verse-selected {
+    background-color: #FFF9C4 !important;
+}
+
+.verse-num.verse-selected,
+.verse-num.inline.verse-selected {
+    background-color: #FFD54F !important;
+    font-weight: bold;
+    border-radius: 3px;
+    padding: 1px 3px;
+}
+
+.verses-section .verse-selected {
+    transition: background-color 0.2s;
+}
+
+.verses-section .verse-content.verse-selected {
+    background-color: rgba(255, 249, 196, 0.5) !important;
+    border-left: 3px solid #FFD54F;
+    padding-left: 0.5rem;
 }
 
 /* Responsive: stack on narrow screens */
