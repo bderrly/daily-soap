@@ -11,6 +11,10 @@ import (
 )
 
 func main() {
+	opts := &slog.HandlerOptions{Level: slog.LevelDebug}
+	handler := slog.NewTextHandler(os.Stderr, opts)
+	slog.SetDefault(slog.New(handler))
+
 	mux := server.Muxer()
 
 	srv := http.Server{

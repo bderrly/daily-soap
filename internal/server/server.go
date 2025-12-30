@@ -118,7 +118,7 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 
 	// Prepare template data
 	data := map[string]any{
-		"verses":         verseContents,
+		"esvData":        verseContents,
 		"date":           today,
 		"observation":    soapData.Observation,
 		"application":    soapData.Application,

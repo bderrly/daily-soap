@@ -3,6 +3,7 @@ package esv
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -39,6 +40,7 @@ func FetchVerses(references []string) (EsvResponse, error) {
 	params.Add("q", strings.Join(references, ";"))
 	params.Add("include-audio-link", "false")
 	params.Add("wrapping-div", "true")
+	params.Add("include-footnotes", "false")
 	apiURL += "?" + params.Encode()
 
 	var apiResp EsvResponse
@@ -53,6 +55,7 @@ func FetchVerses(references []string) (EsvResponse, error) {
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}
+	slog.Debug("fetching verses", "references", references, "apiURL", apiURL)
 	resp, err := client.Do(req)
 	if err != nil {
 		return apiResp, fmt.Errorf("failed to fetch verse: %w", err)
@@ -66,6 +69,17 @@ func FetchVerses(references []string) (EsvResponse, error) {
 	// Decode the JSON response
 	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
 		return apiResp, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	// Post-process the HTML to wrap verses in selectable spans
+	for i, p := range apiResp.Passages {
+		processed, err := processPassageHTML(p)
+		if err != nil {
+			// Getting partial functionality (original HTML) is better than breaking everything.
+			slog.Error("error processing passage HTML", "error", err)
+			continue
+		}
+		apiResp.Passages[i] = processed
 	}
 
 	return apiResp, nil

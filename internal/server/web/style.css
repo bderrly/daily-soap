@@ -174,19 +174,13 @@ p {
     cursor: pointer;
 }
 
-.verses-section .verse-content:hover {
-    background-color: rgba(255, 249, 196, 0.3);
-}
+
 
 .verse-selected {
     background-color: #FFF9C4 !important;
     border-radius: 3px;
     padding: 2px 4px;
     cursor: pointer;
-}
-
-.verse-content .verse-selected {
-    background-color: #FFF9C4 !important;
 }
 
 .verse-num.verse-selected,
@@ -201,27 +195,20 @@ p {
     transition: background-color 0.2s;
 }
 
-.verses-section .verse-content.verse-selected {
-    background-color: rgba(255, 249, 196, 0.5) !important;
-    border-left: 3px solid #FFD54F;
-    padding-left: 0.5rem;
-}
-
 /* Responsive: stack on narrow screens */
 @media (max-width: 900px) {
     .content-wrapper {
         flex-direction: column;
     }
-    
+
     .verses-section,
     .soap-section {
         width: 100%;
     }
-    
+
     .soap-section {
         position: static;
         max-height: none;
         overflow-y: visible;
     }
 }
-
