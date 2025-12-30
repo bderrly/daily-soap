@@ -2,46 +2,33 @@ package server
 
 import (
 	"database/sql"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"io/fs"
 	"log/slog"
 	"net/http"
-	"net/url"
-	"sync"
 	"time"
+
+	"derrclan.com/moravian-soap/internal/dailytexts"
+	"derrclan.com/moravian-soap/internal/esv"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
 var (
-	// Cache of loaded year data, keyed by year (e.g., "2025", "2026")
-	yearDataCache = make(map[string]Year)
-	cacheMutex    sync.RWMutex
-	tmpl          *template.Template
-	db            *sql.DB
-
-	// TODO: Paste your ESV API token here
-	esvAPIKey = "YOUR_KEY"
+	tmpl *template.Template
+	db   *sql.DB
 )
 
-// esvAPIResponse represents the response structure from the ESV API
-type esvAPIResponse struct {
-	Passages  []string `json:"passages"`
-	Copyright string   `json:"copyright"`
-}
+//go:embed web
+var web embed.FS
 
 func init() {
 	// Initialize database
 	if err := initDB(); err != nil {
 		slog.Error("failed to initialize database", "error", err)
-	}
-
-	// Load current year data
-	currentYear := time.Now().Format("2006")
-	if err := loadYearData(currentYear); err != nil {
-		slog.Error("failed to load year data", "year", currentYear, "error", err)
 	}
 
 	// Parse templates with function map for safe HTML rendering
@@ -95,7 +82,7 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 	today := time.Now().Format("2006-01-02")
 
 	// Get today's data (will load year file if needed)
-	dailyText, err := getDailyText(today)
+	dailyText, err := dailytexts.GetDailyText(today)
 	if err != nil {
 		slog.Error("failed to get daily text", "date", today, "error", err)
 		http.Error(w, fmt.Sprintf("Error loading data for date: %s", today), http.StatusInternalServerError)
@@ -109,7 +96,11 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch verse content from ESV API
-	verseContents := fetchVersesContent(dailyText.Verses)
+	verseContents, err := esv.FetchVerses(dailyText.Verses)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error loading verses for %s", today), http.StatusInternalServerError)
+		return
+	}
 
 	// Load existing SOAP data from database
 	soapData, err := getSOAPData(today)
@@ -153,7 +144,7 @@ func handleVerses(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get daily text for the requested date
-	dailyText, err := getDailyText(dateStr)
+	dailyText, err := dailytexts.GetDailyText(dateStr)
 	if err != nil {
 		slog.Error("failed to get daily text", "date", dateStr, "error", err)
 		http.Error(w, fmt.Sprintf("Error loading data for date: %s", dateStr), http.StatusInternalServerError)
@@ -167,7 +158,11 @@ func handleVerses(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch verse content from ESV API
-	verseContents := fetchVersesContent(dailyText.Verses)
+	verseContents, err := esv.FetchVerses(dailyText.Verses)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error fetching verses for %s", dateStr), http.StatusInternalServerError)
+		return
+	}
 
 	// Prepare template data
 	data := map[string]any{
@@ -181,161 +176,6 @@ func handleVerses(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-}
-
-// getDailyText retrieves the daily text for a given date (YYYY-MM-DD format).
-// It will automatically load the year file if it hasn't been loaded yet.
-func getDailyText(dateStr string) (*DailyText, error) {
-	// Extract year from date string (first 4 characters)
-	if len(dateStr) < 4 {
-		return nil, fmt.Errorf("invalid date format: %s", dateStr)
-	}
-	year := dateStr[:4]
-
-	// Check if year data is already loaded
-	cacheMutex.RLock()
-	yearData, ok := yearDataCache[year]
-	cacheMutex.RUnlock()
-
-	if !ok {
-		// Load year data if not in cache
-		if err := loadYearData(year); err != nil {
-			return nil, fmt.Errorf("failed to load year data for %s: %w", year, err)
-		}
-		cacheMutex.RLock()
-		yearData = yearDataCache[year]
-		cacheMutex.RUnlock()
-	}
-
-	// Get the daily text for the date
-	dailyText, ok := yearData[dateStr]
-	if !ok {
-		return nil, nil // Date not found, but not an error
-	}
-
-	return &dailyText, nil
-}
-
-// loadYearData loads the JSON data for the specified year.
-// The year should be in format "YYYY" (e.g., "2025", "2026").
-func loadYearData(year string) error {
-	// Check if already loaded
-	cacheMutex.RLock()
-	if _, ok := yearDataCache[year]; ok {
-		cacheMutex.RUnlock()
-		return nil // Already loaded
-	}
-	cacheMutex.RUnlock()
-
-	// Read the year file
-	filename := fmt.Sprintf("web/%s.json", year)
-	data, err := web.ReadFile(filename)
-	if err != nil {
-		return fmt.Errorf("failed to read %s: %w", filename, err)
-	}
-
-	// Unmarshal JSON
-	var yearData Year
-	if err := json.Unmarshal(data, &yearData); err != nil {
-		return fmt.Errorf("failed to unmarshal JSON from %s: %w", filename, err)
-	}
-
-	// Store in cache
-	cacheMutex.Lock()
-	yearDataCache[year] = yearData
-	cacheMutex.Unlock()
-
-	slog.Info("loaded year data", "year", year)
-	return nil
-}
-
-// fetchVerseFromESV fetches verse HTML content and copyright from the ESV API
-func fetchVerseFromESV(reference string) (*VerseContent, error) {
-	if esvAPIKey == "" {
-		return nil, fmt.Errorf("ESV API key not configured")
-	}
-
-	// Build the API URL
-	apiURL := "https://api.esv.org/v3/passage/html/"
-	params := url.Values{}
-	params.Add("q", reference)
-	params.Add("include-audio-link", "false")
-	params.Add("wrapping-div", "true")
-	apiURL += "?" + params.Encode()
-
-	// Create the request
-	req, err := http.NewRequest("GET", apiURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Add the Authorization header
-	req.Header.Set("Authorization", fmt.Sprintf("Token %s", esvAPIKey))
-
-	// Make the request
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch verse: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("ESV API returned status %d", resp.StatusCode)
-	}
-
-	// Decode the JSON response
-	var apiResp esvAPIResponse
-	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	// Extract the HTML content (usually the first passage)
-	var htmlContent string
-	if len(apiResp.Passages) > 0 {
-		htmlContent = apiResp.Passages[0]
-	}
-
-	return &VerseContent{
-		Reference: reference,
-		HTML:      htmlContent,
-		Copyright: apiResp.Copyright,
-	}, nil
-}
-
-// fetchVersesContent fetches verse content for all verse references
-func fetchVersesContent(references []string) []VerseContent {
-	var verses []VerseContent
-	var copyright string // We'll use the copyright from the last verse (they should all be the same)
-
-	for _, ref := range references {
-		verse, err := fetchVerseFromESV(ref)
-		if err != nil {
-			slog.Error("failed to fetch verse", "reference", ref, "error", err)
-			// Continue with other verses even if one fails
-			verses = append(verses, VerseContent{
-				Reference: ref,
-				HTML:      fmt.Sprintf("<p>Error loading verse: %s</p>", err.Error()),
-				Copyright: "",
-			})
-			continue
-		}
-		verses = append(verses, *verse)
-		if verse.Copyright != "" {
-			copyright = verse.Copyright
-		}
-	}
-
-	// Set copyright for all verses (in case some were missing)
-	for i := range verses {
-		if verses[i].Copyright == "" {
-			verses[i].Copyright = copyright
-		}
-	}
-
-	return verses
 }
 
 // initDB initializes the SQLite database and creates the necessary table.
