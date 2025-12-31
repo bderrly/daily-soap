@@ -7,10 +7,14 @@ import (
 	"os"
 	"os/signal"
 
+	"github.com/joho/godotenv"
+
 	"derrclan.com/moravian-soap/internal/server"
 )
 
 func main() {
+	_ = godotenv.Load()
+
 	opts := &slog.HandlerOptions{Level: slog.LevelDebug}
 	handler := slog.NewTextHandler(os.Stderr, opts)
 	slog.SetDefault(slog.New(handler))

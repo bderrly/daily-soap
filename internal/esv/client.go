@@ -6,12 +6,9 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
-)
-
-var (
-	esvAPIKey = "YOUR_KEY"
 )
 
 // PassageMeta represents the metadata for a passage.
@@ -50,7 +47,7 @@ func FetchVerses(references []string) (EsvResponse, error) {
 		return apiResp, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Token %s", esvAPIKey))
+	req.Header.Set("Authorization", fmt.Sprintf("Token %s", os.Getenv("ESV_API_KEY")))
 
 	client := &http.Client{
 		Timeout: 10 * time.Second,
