@@ -191,7 +191,9 @@ p {
     cursor: pointer;
 }
 
-
+.verse-num {
+    margin: 0 0.25rem;
+}
 
 .verse-selected {
     background-color: #FFF9C4 !important;
@@ -210,6 +212,17 @@ p {
 
 .verses-section .verse-selected {
     transition: background-color 0.2s;
+}
+
+.chapter-num {
+    float: left;
+    font-size: 4rem;
+    line-height: 0.8;
+    font-weight: 400;
+    margin-right: 0.5rem;
+    margin-top: 0.1rem;
+    margin-bottom: -0.2rem;
+    color: #2C3E50;
 }
 
 /* Responsive: stack on narrow screens */

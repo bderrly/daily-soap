@@ -38,6 +38,7 @@ func FetchVerses(references []string) (EsvResponse, error) {
 	params.Add("include-audio-link", "false")
 	params.Add("wrapping-div", "true")
 	params.Add("include-footnotes", "false")
+	params.Add("include-first-verse-numbers", "false")
 	apiURL += "?" + params.Encode()
 
 	var apiResp EsvResponse
