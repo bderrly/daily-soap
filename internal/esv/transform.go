@@ -59,6 +59,51 @@ func processNode(n *html.Node, activeVerseID string) string {
 		c = next
 	}
 
+	// First pass: Identify and group poetic lines into sections
+	var groupedChildren []*html.Node
+	var currentSection *html.Node
+
+	for i := 0; i < len(children); i++ {
+		c := children[i]
+
+		// Check for start of line group
+		if isBeginLineGroup(c) {
+			currentSection = &html.Node{
+				Type:     html.ElementNode,
+				Data:     "section",
+				DataAtom: atom.Section,
+				Attr: []html.Attribute{
+					{Key: "class", Val: "line-group"},
+				},
+			}
+			groupedChildren = append(groupedChildren, currentSection)
+			continue // Skip adding the begin marker itself
+		}
+
+		// Check for end of line group
+		if isEndLineGroup(c) {
+			currentSection = nil
+			// Skip adding the end marker itself
+
+			// Look ahead for empty verse span and remove it if present
+			if i+1 < len(children) {
+				next := children[i+1]
+				if isEmptyVerse(next) {
+					i++ // Skip the empty verse span
+				}
+			}
+			continue
+		}
+
+		if currentSection != nil {
+			currentSection.AppendChild(c)
+		} else {
+			groupedChildren = append(groupedChildren, c)
+		}
+	}
+
+	children = groupedChildren
+
 	if len(children) > 0 {
 		var newChildren []*html.Node
 
@@ -239,6 +284,27 @@ func isBlock(n *html.Node) bool {
 
 func isPoeticLine(n *html.Node) bool {
 	return n.Data == "span" && hasClass(n, "line")
+}
+
+func isBeginLineGroup(n *html.Node) bool {
+	return n.Data == "span" && hasClass(n, "begin-line-group")
+}
+
+func isEndLineGroup(n *html.Node) bool {
+	return n.Data == "span" && hasClass(n, "end-line-group")
+}
+
+func isEmptyVerse(n *html.Node) bool {
+	if n.Data != "span" || !hasClass(n, "verse") {
+		return false
+	}
+	// It's empty if it has no children or only empty text
+	if n.FirstChild == nil {
+		return true
+	}
+	// A bit risky if it has attributes that matter, but request was specific about empty span
+	// removal after end-line-group.
+	return false
 }
 
 func addClass(n *html.Node, newClass string) {

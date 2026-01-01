@@ -209,7 +209,36 @@ func TestProcessPassageHTML_UserRepro(t *testing.T) {
 	}
 }
 
-// normalize removes newlines and extra spaces for loose comparison
+func TestProcessPassageHTML_LineGroupRepro(t *testing.T) {
+	input := `<p class="block-indent"><span class="begin-line-group"></span>
+<span id="p19001001_11-1" class="line verse"><b class="chapter-num" id="v19001001-1">1:1</b>Blessed is the man</span><br><span id="p19001001_11-1" class="indent line verse">who walks not in the counsel of the wicked,</span><br><span id="p19001001_11-1" class="line verse">nor stands in the way of sinners,</span><br><span id="p19001001_11-1" class="indent line verse">nor sits in the seat of scoffers;</span><br><span id="p19001002_11-1" class="line verse"><b class="verse-num inline" id="v19001002-1">2</b>but his delight is in the law of the LORD,</span><br><span id="p19001002_11-1" class="indent line verse">and on his law he meditates day and night.</span><br><span class="end-line-group"></span><span id="v19001002-1" class="verse"></span></p><span id="v19001006-1" class="verse"></span>`
+
+	// Note: The expected output should NOT have the empty spans, and SHOULD have the section tag.
+	// We also expect verse wrapping logic to apply if it wasn't already applied, but in this input the classes are already there (simulated pre-processed or just ignoring that for this specific transformation focus)?
+	// Actually, the user's "Example existing HTML" input ALREADY has `class="line verse"`. The previous transform step (or just the user's example context) implies we are augmenting or this is a fresh run.
+	// `processPassageHTML` adds "verse" class. Even if inputs have it, `addClass` is safe.
+	// The key expectation is the structure change.
+
+	expectedSnippet := `<p class="block-indent"><section class="line-group"><span id="p19001001_11-1" class="line verse"><b class="chapter-num" id="v19001001-1">1:1</b>Blessed is the man</span><br/><span id="p19001001_11-1" class="indent line verse">who walks not in the counsel of the wicked,</span><br/><span id="p19001001_11-1" class="line verse">nor stands in the way of sinners,</span><br/><span id="p19001001_11-1" class="indent line verse">nor sits in the seat of scoffers;</span><br/><span id="p19001002_11-1" class="line verse"><b class="verse-num inline" id="v19001002-1">2</b>but his delight is in the law of the LORD,</span><br/><span id="p19001002_11-1" class="indent line verse">and on his law he meditates day and night.</span><br/></section></p>`
+
+	got, err := processPassageHTML(input)
+	if err != nil {
+		t.Fatalf("processPassageHTML error: %v", err)
+	}
+
+	// Normalize for comparison (newlines/spaces)
+	if !strings.Contains(normalize(got), normalize(expectedSnippet)) {
+		t.Errorf("Result did not contain expected structure.\nExpected:\n%s\n\nGot:\n%s", expectedSnippet, got)
+	}
+
+	// Explicit check for removal of empty span at end
+	if strings.Contains(got, `<span id="v19001002-1" class="verse"></span>`) {
+		t.Error("Failed to remove empty verse span after end-line-group")
+	}
+	if strings.Contains(got, "begin-line-group") || strings.Contains(got, "end-line-group") {
+		t.Error("Failed to remove marker spans")
+	}
+}
 func normalize(s string) string {
 	s = strings.ReplaceAll(s, "\n", "")
 	return strings.Join(strings.Fields(s), " ")
