@@ -18,8 +18,8 @@ func TestProcessPassageHTML(t *testing.T) {
 <b class="verse-num" id="v01001002">2</b> The earth was void.
 </p>`,
 			expected: []string{
-				`<span id="v01001001" class="verse-span"><b class="verse-num">1</b> In the beginning.`,
-				`<span id="v01001002" class="verse-span"><b class="verse-num">2</b> The earth was void.`,
+				`<span id="v01001001" class="verse-span"><b class="verse-num">` + "\u00A0" + `1</b> In the beginning.`,
+				`<span id="v01001002" class="verse-span"><b class="verse-num">` + "\u00A0" + `2</b> The earth was void.`,
 			},
 		},
 		{
@@ -32,7 +32,7 @@ children who will not deal falsely.
 </div>`,
 			expected: []string{
 				// First block wrapped
-				`<span id="v23063008" class="verse-span"><b>8</b> He said, &#34;Surely they are my people&#34;`,
+				`<span id="v23063008" class="verse-span"><b>` + "\u00A0" + `8</b> He said, &#34;Surely they are my people&#34;`,
 				// Second block wrapped with SAME ID
 				// We just check that the text is inside the span with the correct ID
 				`id="v23063008"`,
@@ -45,9 +45,9 @@ children who will not deal falsely.
 			input: `<p><b id="v1">1</b> Start of verse 1.</p>
 <p>End of verse 1. <b id="v2">2</b> Start of verse 2.</p>`,
 			expected: []string{
-				`<span id="v1" class="verse-span"><b>1</b> Start of verse 1.</span>`,
-				`<span id="v1" class="verse-span">End of verse 1. </span>`,
-				`<span id="v2" class="verse-span"><b>2</b> Start of verse 2.</span>`,
+				`<span id="v1" class="verse-span"><b>` + "\u00A0" + `1</b> Start of verse 1.</span>`,
+				`<span id="v1" class="verse-span">End of verse 1.</span>`,
+				`<span id="v2" class="verse-span"><b>` + "\u00A0" + `2</b> Start of verse 2.</span>`,
 			},
 		},
 		{
@@ -60,9 +60,22 @@ children who will not deal falsely.
 				// Marker inside span should be found and wrapped.
 				// Note: The wrapper is INSIDE the span.line.
 				// We check for the sequence: wrapper start -> b tag with class -> text
-				`<span id="v19148007-1" class="verse-span"><b class="verse-num">7</b> Praise the LORD</span>`,
+				`<span id="v19148007-1" class="verse-span"><b class="verse-num">` + "\u00A0" + `7</b> Praise the LORD</span>`,
 				// Subsequent line should also be wrapped
 				`<span id="v19148007-1" class="verse-span">you great sea creatures</span>`,
+			},
+		},
+		{
+			name: "Verse with spacing issues",
+			input: `<p>
+<b class="verse-num" id="v39003002-1">2</b>But who can endure the day of his coming? 
+For he is like a refiner’s fire and like fullers’ soap. 
+</p>`,
+			expected: []string{
+				// Expecting &nbsp; before the verse number 2
+				`<span id="v39003002-1" class="verse-span"><b class="verse-num">` + "\u00A0" + `2</b>But who can endure the day of his coming?`,
+				// Expecting trimmed trailing whitespace at the end of the span
+				`soap.</span>`,
 			},
 		},
 	}

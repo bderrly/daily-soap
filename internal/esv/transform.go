@@ -61,8 +61,11 @@ func processNode(n *html.Node, activeVerseID string) string {
 		var currentWrapper *html.Node
 
 		// Helper to close current wrapper
-		closeWrapper := func() {
+		closeWrapper := func(doTrim bool) {
 			if currentWrapper != nil {
+				if doTrim {
+					trimTrailingWhitespace(currentWrapper)
+				}
 				newChildren = append(newChildren, currentWrapper)
 				currentWrapper = nil
 			}
@@ -75,10 +78,15 @@ func processNode(n *html.Node, activeVerseID string) string {
 			if verseID != "" {
 				// New verse starts here.
 				activeVerseID = verseID
-				closeWrapper()
+				closeWrapper(true) // Always trim at end of verse (next verse acts as boundary/padding)
 
 				// Start new wrapper
 				currentWrapper = createWrapper(activeVerseID)
+
+				// FIX: Insert &nbsp; before text in verse number element
+				if c.Data == "b" || hasClass(c, "verse-num") {
+					insertNBSP(c)
+				}
 
 				// Strip ID from marker
 				removeID(c)
@@ -90,7 +98,7 @@ func processNode(n *html.Node, activeVerseID string) string {
 				// Container element (block or inline like span/div/p)
 				// Close current wrapper to avoid wrapping the container itself
 				// instead, we recurse to wrap content inside it.
-				closeWrapper()
+				closeWrapper(false) // Do NOT trim when descending into child (concatenation risk)
 
 				// Recurse into the element with current state
 				activeVerseID = processNode(c, activeVerseID)
@@ -112,7 +120,8 @@ func processNode(n *html.Node, activeVerseID string) string {
 		}
 
 		// Append any final wrapper
-		closeWrapper()
+		// Only trim if we are at the end of a block context
+		closeWrapper(isBlock(n))
 
 		// Rebuild children
 		for _, c := range newChildren {
@@ -154,4 +163,46 @@ func removeID(n *html.Node) {
 			return
 		}
 	}
+}
+
+func insertNBSP(n *html.Node) {
+	nbsp := &html.Node{
+		Type:     html.TextNode,
+		Data:     "\u00A0",
+		DataAtom: 0,
+	}
+	nbsp.Parent = n
+	if n.FirstChild != nil {
+		nbsp.NextSibling = n.FirstChild
+		n.FirstChild.PrevSibling = nbsp
+	}
+	n.FirstChild = nbsp
+}
+
+func trimTrailingWhitespace(n *html.Node) {
+	if n.LastChild != nil && n.LastChild.Type == html.TextNode {
+		n.LastChild.Data = strings.TrimRight(n.LastChild.Data, " \t\n\r")
+	}
+}
+
+func hasClass(n *html.Node, class string) bool {
+	for _, a := range n.Attr {
+		if a.Key == "class" {
+			for _, c := range strings.Fields(a.Val) {
+				if c == class {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func isBlock(n *html.Node) bool {
+	// Common block elements. This is not exhaustive but covers ESV structure.
+	switch n.Data {
+	case "p", "div", "blockquote", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "body", "br":
+		return true
+	}
+	return false
 }
