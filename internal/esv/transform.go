@@ -10,8 +10,8 @@ import (
 	"golang.org/x/net/html/atom"
 )
 
-// processPassageHTML takes an HTML string containing verses and wraps each verse
-// (highlight + following text) in a span that carries the verse ID.
+// processPassageHTML takes an HTML string containing verses and wraps/tags each verse
+// (highlight + following text) in a span that carries the verse ID or tags the existing span.
 func processPassageHTML(htmlStr string) (string, error) {
 	// Parse the HTML fragment
 	nodes, err := html.ParseFragment(strings.NewReader(htmlStr), &html.Node{
@@ -37,6 +37,9 @@ func processPassageHTML(htmlStr string) (string, error) {
 	return buf.String(), nil
 }
 
+// cutset includes spaces, newlines, tabs, and non-breaking spaces
+const cutset = " \t\n\r\u00A0"
+
 // verseIDRegex matches verse IDs like "v23063001" or "v23063001-1"
 var verseIDRegex = regexp.MustCompile(`^v\d+.*`)
 
@@ -58,7 +61,15 @@ func processNode(n *html.Node, activeVerseID string) string {
 
 	if len(children) > 0 {
 		var newChildren []*html.Node
+
 		var currentWrapper *html.Node
+
+		// If we are continuing a verse in a poetic line, we should trim the leading whitespace (indentation)
+		shouldTrimNextText := activeVerseID != "" && isPoeticLine(n)
+
+		if shouldTrimNextText {
+			addClass(n, "verse")
+		}
 
 		// Helper to close current wrapper
 		closeWrapper := func(doTrim bool) {
@@ -68,6 +79,7 @@ func processNode(n *html.Node, activeVerseID string) string {
 				}
 				newChildren = append(newChildren, currentWrapper)
 				currentWrapper = nil
+				shouldTrimNextText = false
 			}
 		}
 
@@ -80,19 +92,23 @@ func processNode(n *html.Node, activeVerseID string) string {
 				activeVerseID = verseID
 				closeWrapper(true) // Always trim at end of verse (next verse acts as boundary/padding)
 
-				// Start new wrapper
-				currentWrapper = createWrapper(activeVerseID)
-
-				// FIX: Insert &nbsp; before text in verse number element
-				if c.Data == "b" || hasClass(c, "verse-num") {
-					insertNBSP(c)
+				isPoetic := isPoeticLine(n)
+				if isPoetic {
+					// Hybrid optimization: Tag the existing poetic line (n)
+					addClass(n, "verse")
+					// Do not remove ID from marker for poetry to preserve data (since container has p-ID)
+					// Append marker directly to container
+					cleanVerseMarker(c)
+					newChildren = append(newChildren, c)
+					shouldTrimNextText = true
+				} else {
+					// Prose: Wrap in new span
+					currentWrapper = createWrapper(activeVerseID)
+					cleanVerseMarker(c)
+					removeID(c) // Move ID to wrapper effectively (wrapper has it)
+					currentWrapper.AppendChild(c)
+					shouldTrimNextText = true
 				}
-
-				// Strip ID from marker
-				removeID(c)
-
-				// Add marker to wrapper
-				currentWrapper.AppendChild(c)
 
 			} else if c.Type == html.ElementNode {
 				// Container element (block or inline like span/div/p)
@@ -107,11 +123,32 @@ func processNode(n *html.Node, activeVerseID string) string {
 			} else {
 				// Inline content (text, span, etc.)
 				if activeVerseID != "" {
-					// We have an active verse context
-					if currentWrapper == nil {
-						currentWrapper = createWrapper(activeVerseID)
+					isPoetic := isPoeticLine(n)
+
+					if isPoetic {
+						// Append directly to the poetic line
+						if c.Type == html.TextNode && shouldTrimNextText {
+							c.Data = strings.TrimLeft(c.Data, cutset)
+							if len(c.Data) > 0 {
+								shouldTrimNextText = false
+							}
+						}
+						newChildren = append(newChildren, c)
+					} else {
+						// Wrapper logic (Prose)
+						if currentWrapper == nil {
+							currentWrapper = createWrapper(activeVerseID)
+							shouldTrimNextText = true
+						}
+
+						if c.Type == html.TextNode && shouldTrimNextText {
+							c.Data = strings.TrimLeft(c.Data, cutset)
+							if len(c.Data) > 0 {
+								shouldTrimNextText = false
+							}
+						}
+						currentWrapper.AppendChild(c)
 					}
-					currentWrapper.AppendChild(c)
 				} else {
 					// No active verse (e.g. intro text), just append
 					newChildren = append(newChildren, c)
@@ -139,7 +176,7 @@ func createWrapper(id string) *html.Node {
 		DataAtom: atom.Span,
 		Attr: []html.Attribute{
 			{Key: "id", Val: id},
-			{Key: "class", Val: "verse-span"},
+			{Key: "class", Val: "verse"},
 		},
 	}
 }
@@ -165,23 +202,18 @@ func removeID(n *html.Node) {
 	}
 }
 
-func insertNBSP(n *html.Node) {
-	nbsp := &html.Node{
-		Type:     html.TextNode,
-		Data:     "\u00A0",
-		DataAtom: 0,
+func cleanVerseMarker(n *html.Node) {
+	if n.Type == html.TextNode {
+		n.Data = strings.Trim(n.Data, cutset)
 	}
-	nbsp.Parent = n
-	if n.FirstChild != nil {
-		nbsp.NextSibling = n.FirstChild
-		n.FirstChild.PrevSibling = nbsp
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		cleanVerseMarker(c)
 	}
-	n.FirstChild = nbsp
 }
 
 func trimTrailingWhitespace(n *html.Node) {
 	if n.LastChild != nil && n.LastChild.Type == html.TextNode {
-		n.LastChild.Data = strings.TrimRight(n.LastChild.Data, " \t\n\r")
+		n.LastChild.Data = strings.TrimRight(n.LastChild.Data, cutset)
 	}
 }
 
@@ -201,8 +233,23 @@ func hasClass(n *html.Node, class string) bool {
 func isBlock(n *html.Node) bool {
 	// Common block elements. This is not exhaustive but covers ESV structure.
 	switch n.Data {
-	case "p", "div", "blockquote", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "body", "br":
-		return true
 	}
 	return false
+}
+
+func isPoeticLine(n *html.Node) bool {
+	return n.Data == "span" && hasClass(n, "line")
+}
+
+func addClass(n *html.Node, newClass string) {
+	for i, a := range n.Attr {
+		if a.Key == "class" {
+			if !hasClass(n, newClass) {
+				n.Attr[i].Val += " " + newClass
+			}
+			return
+		}
+	}
+	// Class attribute not found, add it
+	n.Attr = append(n.Attr, html.Attribute{Key: "class", Val: newClass})
 }
