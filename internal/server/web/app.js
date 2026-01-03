@@ -245,34 +245,32 @@
         updateVerseReference();
     }
 
-    // Run initialization when DOM is ready
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            // Add listener once
-            const versesSection = document.querySelector('.verses-section');
-            if (versesSection) {
-                versesSection.addEventListener('click', function (e) {
-                    const verseInfo = getVerseInfo(e.target);
-                    if (verseInfo) {
-                        e.preventDefault();
-                        toggleVerseSelection(verseInfo);
-                    }
-                });
-            }
-            refreshHighlights();
-        });
-    } else {
+    function handleVerseClick(e) {
+        // Prevent selection when clicking headers or extra_text
+        if (e.target.closest('h1, h2, h3, h4, h5, h6, .extra_text')) {
+            return;
+        }
+
+        const verseInfo = getVerseInfo(e.target);
+        if (verseInfo) {
+            e.preventDefault();
+            toggleVerseSelection(verseInfo);
+        }
+    }
+
+    function init() {
         const versesSection = document.querySelector('.verses-section');
         if (versesSection) {
-            versesSection.addEventListener('click', function (e) {
-                const verseInfo = getVerseInfo(e.target);
-                if (verseInfo) {
-                    e.preventDefault();
-                    toggleVerseSelection(verseInfo);
-                }
-            });
+            versesSection.addEventListener('click', handleVerseClick);
         }
         refreshHighlights();
+    }
+
+    // Run initialization when DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
     }
 
     // Listen for HTMX swaps to re-apply highlighting
