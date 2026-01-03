@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,27 +8,28 @@
     <title>Moravian Texts + SOAP</title>
     <link rel="stylesheet" href="/web/style.css">
 </head>
+
 <body>
     <div class="container">
         <svg class="logo" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
             <!-- Left page -->
-            <rect x="8" y="12" width="24" height="40" rx="1" fill="#F5F7FA" stroke="#4A6FA5" stroke-width="1.5"/>
+            <rect x="8" y="12" width="24" height="40" rx="1" fill="#F5F7FA" stroke="#4A6FA5" stroke-width="1.5" />
             <!-- Right page -->
-            <rect x="32" y="12" width="24" height="40" rx="1" fill="#F5F7FA" stroke="#4A6FA5" stroke-width="1.5"/>
+            <rect x="32" y="12" width="24" height="40" rx="1" fill="#F5F7FA" stroke="#4A6FA5" stroke-width="1.5" />
             <!-- Spine/binding -->
-            <rect x="30" y="12" width="4" height="40" fill="#2C3E50"/>
+            <rect x="30" y="12" width="4" height="40" fill="#2C3E50" />
             <!-- Text lines on left page -->
-            <line x1="12" y1="20" x2="28" y2="20" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round"/>
-            <line x1="12" y1="26" x2="28" y2="26" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round"/>
-            <line x1="12" y1="32" x2="24" y2="32" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round"/>
-            <line x1="12" y1="38" x2="28" y2="38" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round"/>
-            <line x1="12" y1="44" x2="26" y2="44" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round"/>
+            <line x1="12" y1="20" x2="28" y2="20" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round" />
+            <line x1="12" y1="26" x2="28" y2="26" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round" />
+            <line x1="12" y1="32" x2="24" y2="32" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round" />
+            <line x1="12" y1="38" x2="28" y2="38" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round" />
+            <line x1="12" y1="44" x2="26" y2="44" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round" />
             <!-- Text lines on right page -->
-            <line x1="36" y1="20" x2="52" y2="20" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round"/>
-            <line x1="36" y1="26" x2="52" y2="26" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round"/>
-            <line x1="36" y1="32" x2="50" y2="32" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round"/>
-            <line x1="36" y1="38" x2="52" y2="38" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round"/>
-            <line x1="36" y1="44" x2="48" y2="44" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round"/>
+            <line x1="36" y1="20" x2="52" y2="20" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round" />
+            <line x1="36" y1="26" x2="52" y2="26" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round" />
+            <line x1="36" y1="32" x2="50" y2="32" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round" />
+            <line x1="36" y1="38" x2="52" y2="38" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round" />
+            <line x1="36" y1="44" x2="48" y2="44" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round" />
         </svg>
         <h1>Moravian Texts + SOAP</h1>
         <div class="content-wrapper">
@@ -38,15 +40,23 @@
                 <div class="selected-verses-reference" id="selectedVersesReference"></div>
                 <div class="soap-field">
                     <label for="observation">Observation</label>
-                    <textarea id="observation" name="observation" rows="6" placeholder="What do you observe in these verses?">{{.observation}}</textarea>
+                    <textarea id="observation" name="observation" rows="6"
+                        placeholder="What do you observe in these verses?">{{.observation}}</textarea>
                 </div>
                 <div class="soap-field">
                     <label for="application">Application</label>
-                    <textarea id="application" name="application" rows="6" placeholder="How can you apply this to your life?">{{.application}}</textarea>
+                    <textarea id="application" name="application" rows="6"
+                        placeholder="How can you apply this to your life?">{{.application}}</textarea>
                 </div>
                 <div class="soap-field">
                     <label for="prayer">Prayer</label>
-                    <textarea id="prayer" name="prayer" rows="6" placeholder="What is your prayer?">{{.prayer}}</textarea>
+                    <textarea id="prayer" name="prayer" rows="6"
+                        placeholder="What is your prayer?">{{.prayer}}</textarea>
+                </div>
+                <div class="soap-field">
+                    <label for="date-picker">Date</label>
+                    <input type="date" id="date-picker" name="date" value="{{.date}}" hx-get="/verses"
+                        hx-target=".verses-section" hx-trigger="change" hx-include="this">
                 </div>
                 <div class="save-status" id="saveStatus"></div>
             </div>
@@ -55,11 +65,12 @@
     <script>
         // Initialize data for the external JavaScript file
         window.SOAP_DATA = {
-            date: {{.date | printf "%q"}},
-            selectedVerses: {{if .selectedVerses}}{{.selectedVerses | toJSON}}{{else}}[]{{end}}
+            date: {{.date | printf "%q" }},
+        selectedVerses: { { if .selectedVerses} } { {.selectedVerses | toJSON } } { {else } } []{ { end } }
         };
     </script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="/web/app.js"></script>
 </body>
-</html>
 
+</html>

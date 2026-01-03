@@ -166,8 +166,8 @@ func handleVerses(w http.ResponseWriter, r *http.Request) {
 
 	// Prepare template data
 	data := map[string]any{
-		"verses": verseContents,
-		"date":   dateStr,
+		"esvData": verseContents,
+		"date":    dateStr,
 	}
 
 	// Execute only the verses template

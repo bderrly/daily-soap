@@ -1,11 +1,12 @@
 (function () {
     // Get data from the page (set by inline script in HTML)
-    const date = window.SOAP_DATA?.date || '';
+    let currentDate = window.SOAP_DATA?.date || '';
     const observationField = document.getElementById('observation');
     const applicationField = document.getElementById('application');
     const prayerField = document.getElementById('prayer');
     const saveStatus = document.getElementById('saveStatus');
     const selectedVersesReference = document.getElementById('selectedVersesReference');
+    const datePicker = document.getElementById('date-picker');
 
     let saveTimeout = null;
     const SAVE_DELAY = 1000; // 1 second after last change
@@ -226,21 +227,13 @@
         });
     }
 
-    // Initialize verse selection on page load
-    function initializeVerseSelection() {
-        // Add click handlers to verse content area
-        const versesSection = document.querySelector('.verses-section');
-        if (versesSection) {
-            versesSection.addEventListener('click', function (e) {
-                const verseInfo = getVerseInfo(e.target);
-                if (verseInfo) {
-                    e.preventDefault();
-                    toggleVerseSelection(verseInfo);
-                }
-            });
-        }
 
-        // Highlight initially selected verses (deduplicate by base ID)
+
+    function refreshHighlights() {
+        // Clear all
+        document.querySelectorAll('.verse-selected').forEach(el => el.classList.remove('verse-selected'));
+
+        // Highlight selected verses
         const uniqueBaseIds = new Set();
         selectedVerseIds.forEach(verseId => {
             const baseId = getBaseVerseId(verseId);
@@ -255,19 +248,105 @@
 
     // Run initialization when DOM is ready
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initializeVerseSelection);
+        document.addEventListener('DOMContentLoaded', () => {
+            // Add listener once
+            const versesSection = document.querySelector('.verses-section');
+            if (versesSection) {
+                versesSection.addEventListener('click', function (e) {
+                    const verseInfo = getVerseInfo(e.target);
+                    if (verseInfo) {
+                        e.preventDefault();
+                        toggleVerseSelection(verseInfo);
+                    }
+                });
+            }
+            refreshHighlights();
+        });
     } else {
-        initializeVerseSelection();
+        const versesSection = document.querySelector('.verses-section');
+        if (versesSection) {
+            versesSection.addEventListener('click', function (e) {
+                const verseInfo = getVerseInfo(e.target);
+                if (verseInfo) {
+                    e.preventDefault();
+                    toggleVerseSelection(verseInfo);
+                }
+            });
+        }
+        refreshHighlights();
     }
 
-    function saveData() {
-        const data = {
-            date: date,
+    // Listen for HTMX swaps to re-apply highlighting
+    document.body.addEventListener('htmx:afterSwap', function (evt) {
+        if (evt.target.classList.contains('verses-section')) {
+            refreshHighlights();
+        }
+    });
+
+    // Handle date changes
+    if (datePicker) {
+        // Change event triggers when user commits the date selection.
+        // HTMX also listens to 'change' to update UI.
+        // We must save the old date's data before we update 'currentDate'
+        // and load the new date's data.
+
+        datePicker.addEventListener('change', function (e) {
+            const newDate = datePicker.value;
+            if (newDate === currentDate) return;
+
+            // 1. Save data for the OLD date (currentDate)
+            saveData(true); // synchronous force save? No, fetch is async. But we initiate it with old date.
+
+            // 2. Update current date
+            currentDate = newDate;
+
+            // 3. Load data for the NEW date
+            loadDataForDate(newDate);
+        });
+    }
+
+    function loadDataForDate(dateStr) {
+        // Show loading state?
+        observationField.value = 'Loading...';
+        applicationField.value = 'Loading...';
+        prayerField.value = 'Loading...';
+
+        fetch(`/api/soap?date=${dateStr}`)
+            .then(response => response.json())
+            .then(data => {
+                // Update fields
+                observationField.value = data.observation || '';
+                applicationField.value = data.application || '';
+                prayerField.value = data.prayer || '';
+
+                // Update selected verses
+                selectedVerseIds = data.selectedVerses || [];
+
+                // Refresh highlights (HTMX might or might not have finished, but we call it here)
+                // If HTMX finishes later, htmx:afterSwap will call it again.
+                refreshHighlights();
+            })
+            .catch(err => {
+                console.error('Failed to load data', err);
+                observationField.value = '';
+                applicationField.value = '';
+                prayerField.value = '';
+            });
+    }
+
+    function saveData(immediate = false) {
+        // Capture state at the moment of calling
+        const dataToSave = {
+            date: currentDate, // Use the currentDate scope variable
             observation: observationField.value,
             application: applicationField.value,
             prayer: prayerField.value,
             selectedVerses: selectedVerseIds
         };
+
+        if (immediate) {
+            if (saveTimeout) clearTimeout(saveTimeout);
+        }
 
         saveStatus.textContent = 'Saving...';
         saveStatus.className = 'save-status saving';
@@ -277,7 +356,7 @@
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify(data)
+            body: JSON.stringify(dataToSave)
         })
             .then(response => response.json())
             .then(result => {
@@ -288,8 +367,11 @@
                     saveStatus.textContent = 'Saved';
                     saveStatus.className = 'save-status saved';
                     setTimeout(() => {
-                        saveStatus.textContent = '';
-                        saveStatus.className = 'save-status';
+                        // Only clear if status hasn't changed since
+                        if (saveStatus.textContent === 'Saved') {
+                            saveStatus.textContent = '';
+                            saveStatus.className = 'save-status';
+                        }
                     }, 2000);
                 }
             })

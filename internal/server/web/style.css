@@ -149,7 +149,8 @@ p {
     font-size: 1rem;
 }
 
-.soap-field textarea {
+.soap-field textarea,
+.soap-field input {
     width: 100%;
     padding: 0.75rem;
     border: 2px solid #E0E6ED;
@@ -163,7 +164,8 @@ p {
     transition: border-color 0.2s;
 }
 
-.soap-field textarea:focus {
+.soap-field textarea:focus,
+.soap-field input:focus {
     outline: none;
     border-color: #6B8FA3;
     background: #FFFFFF;
