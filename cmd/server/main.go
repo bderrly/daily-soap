@@ -35,13 +35,14 @@ func main() {
 		<-sigint
 
 		if err := srv.Shutdown(ctx); err != nil {
-			slog.Error("error shutting down http server")
+			slog.Error("error shutting down http server", "error", err)
 		}
 		close(idleConns)
 	}()
 
 	if err := srv.ListenAndServe(); err != nil {
-		slog.Error("http server died")
+		slog.Error("http server died", "error", err)
+		os.Exit(1)
 	}
 	<-idleConns
 }
