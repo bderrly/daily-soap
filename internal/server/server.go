@@ -57,8 +57,8 @@ func Muxer() *http.ServeMux {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/", handleIndex)
-	mux.HandleFunc("/verses", handleVerses)
-	mux.HandleFunc("/api/soap", handleSOAP)
+	mux.HandleFunc("/reading", handleVerses)
+	mux.HandleFunc("/soap", handleSOAP)
 
 	// Create a subdirectory filesystem for the web directory
 	webFS, err := fs.Sub(web, "web")

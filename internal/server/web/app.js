@@ -311,7 +311,7 @@
         applicationField.value = 'Loading...';
         prayerField.value = 'Loading...';
 
-        fetch(`/api/soap?date=${dateStr}`)
+        fetch(`/soap?date=${dateStr}`)
             .then(response => response.json())
             .then(data => {
                 // Update fields
@@ -351,7 +351,7 @@
         saveStatus.textContent = 'Saving...';
         saveStatus.className = 'save-status saving';
 
-        fetch('/api/soap', {
+        fetch('/soap', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
