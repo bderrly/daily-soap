@@ -61,7 +61,6 @@ h1 {
 }
 
 p {
-    color: #5A6C7D;
     margin-bottom: 1.5rem;
     font-size: 0.95rem;
 }
@@ -83,15 +82,17 @@ p {
 }
 
 .line {
-    display: block;
     margin: 0;
     font-size: var(--serif-font-size);
     line-height: calc(var(--serif-font-size) + var(--line-height-offset));
 }
 
 .line.indent {
-    padding-left: 8.75rem;
-    text-indent: -7.5rem;
+    padding-left: 2rem;
+}
+
+.verse {
+    color: #5A6C7D;
 }
 
 .verses {

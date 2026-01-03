@@ -1,12 +1,10 @@
 <div class="daily-reading">
 	<h2>{{.date}}</h2>
 	{{ if .esvData.Passages }}
-	<div class="verses">
+	<div class="passages">
 		{{- range .esvData.Passages}}
-		<div class="verse">
-			<div class="verse-content">
-				{{. | safeHTML}}
-			</div>
+		<div class="passage-content">
+			{{. | safeHTML}}
 		</div>
 		{{- end}}
 		<div class="copyright">
