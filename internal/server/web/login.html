@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Login - Moravian Texts + SOAP</title>
+    <link rel="stylesheet" href="/web/style.css">
+</head>
+
+<body>
+    <div class="auth-container">
+        <div class="logo-container">
+            <svg class="logo" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"
+                style="width: 64px; height: 64px;">
+                <!-- Reusing the SVG from index.html -->
+                <rect x="8" y="12" width="24" height="40" rx="1" fill="#F5F7FA" stroke="#4A6FA5" stroke-width="1.5" />
+                <rect x="32" y="12" width="24" height="40" rx="1" fill="#F5F7FA" stroke="#4A6FA5" stroke-width="1.5" />
+                <rect x="30" y="12" width="4" height="40" fill="#2C3E50" />
+                <line x1="12" y1="20" x2="28" y2="20" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round" />
+                <line x1="12" y1="26" x2="28" y2="26" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round" />
+                <line x1="12" y1="32" x2="24" y2="32" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round" />
+                <line x1="12" y1="38" x2="28" y2="38" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round" />
+                <line x1="12" y1="44" x2="26" y2="44" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round" />
+                <line x1="36" y1="20" x2="52" y2="20" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round" />
+                <line x1="36" y1="26" x2="52" y2="26" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round" />
+                <line x1="36" y1="32" x2="50" y2="32" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round" />
+                <line x1="36" y1="38" x2="52" y2="38" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round" />
+                <line x1="36" y1="44" x2="48" y2="44" stroke="#4A6FA5" stroke-width="1" stroke-linecap="round" />
+            </svg>
+        </div>
+
+        <h1 class="header-title login">
+            {{if .IsLogin}}Welcome Back{{else}}Create Account{{end}}
+        </h1>
+
+        {{if .Error}}
+        <div class="error-message">
+            {{.Error}}
+        </div>
+        {{end}}
+
+        <form class="auth-form" method="POST" action="{{if .IsLogin}}/login{{else}}/register{{end}}">
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" name="email" value="{{.Email}}" required autofocus>
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+
+            <button type="submit" class="auth-btn">
+                {{if .IsLogin}}Sign In{{else}}Create Account{{end}}
+            </button>
+        </form>
+
+        <div class="auth-switch">
+            {{if .IsLogin}}
+            Don't have an account? <a href="/register">Sign up</a>
+            {{else}}
+            Already have an account? <a href="/login">Sign in</a>
+            {{end}}
+        </div>
+    </div>
+</body>
+
+</html>

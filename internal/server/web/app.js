@@ -228,7 +228,6 @@
     }
 
 
-
     function refreshHighlights() {
         // Clear all
         document.querySelectorAll('.verse-selected').forEach(el => el.classList.remove('verse-selected'));
@@ -285,17 +284,15 @@
 
     // Handle date changes
     if (datePicker) {
-        // Change event triggers when user commits the date selection.
-        // HTMX also listens to 'change' to update UI.
-        // We must save the old date's data before we update 'currentDate'
-        // and load the new date's data.
-
         datePicker.addEventListener('change', function (e) {
             const newDate = datePicker.value;
             if (newDate === currentDate) return;
 
             // 1. Save data for the OLD date (currentDate)
-            saveData(true); // synchronous force save? No, fetch is async. But we initiate it with old date.
+            // Only save if we have a valid current date
+            if (currentDate) {
+                saveData(true);
+            }
 
             // 2. Update current date
             currentDate = newDate;
@@ -322,8 +319,16 @@
                 // Update selected verses
                 selectedVerseIds = data.selectedVerses || [];
 
-                // Refresh highlights (HTMX might or might not have finished, but we call it here)
-                // If HTMX finishes later, htmx:afterSwap will call it again.
+                // Update current date from server response (source of truth)
+                if (data.date) {
+                    currentDate = data.date;
+                    // Ensure date picker reflects the actual date loaded
+                    if (datePicker && datePicker.value !== data.date) {
+                        datePicker.value = data.date;
+                    }
+                }
+
+                // Refresh highlights
                 refreshHighlights();
             })
             .catch(err => {
@@ -335,6 +340,11 @@
     }
 
     function saveData(immediate = false) {
+        // Guard against saving with empty date
+        if (!currentDate) {
+            return;
+        }
+
         // Capture state at the moment of calling
         const dataToSave = {
             date: currentDate, // Use the currentDate scope variable
@@ -393,4 +403,3 @@
     applicationField.addEventListener('input', scheduleSave);
     prayerField.addEventListener('input', scheduleSave);
 })();
-
