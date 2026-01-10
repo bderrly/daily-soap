@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"derrclan.com/moravian-soap/internal/cache_expunger"
 	"derrclan.com/moravian-soap/internal/dailytexts"
 	"derrclan.com/moravian-soap/internal/esv"
 	"golang.org/x/crypto/bcrypt"
@@ -413,6 +414,10 @@ func initDB() error {
 	}
 
 	slog.Info("database initialized successfully")
+
+	// Start the cache expunger service
+	cache_expunger.Start(db)
+
 	return nil
 }
 
