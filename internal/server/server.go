@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"derrclan.com/moravian-soap/internal/dailytexts"
@@ -76,7 +77,7 @@ func Muxer() *http.ServeMux {
 
 	// Protected routes
 	mux.HandleFunc("/", authMiddleware(handleIndex))
-	mux.HandleFunc("/reading", authMiddleware(handleVerses))
+	mux.HandleFunc("/reading", authMiddleware(handleReading))
 	mux.HandleFunc("/soap", authMiddleware(handleSOAP))
 
 	// Create a subdirectory filesystem for the web directory
@@ -266,8 +267,8 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch verse content from ESV API
-	verseContents, err := esv.FetchVerses(dailyText.Verses)
+	// Fetch verse content from ESV API (using cache)
+	verseContents, err := fetchPassagesWithCache(dailyText.Verses)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error loading verses for %s", today), http.StatusInternalServerError)
 		return
@@ -306,9 +307,9 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleVerses handles requests for the verses partial template (for HTMX).
+// handleReading handles requests for the verses partial template (for HTMX).
 // Accepts a "date" query parameter (YYYY-MM-DD format). Defaults to today if not provided.
-func handleVerses(w http.ResponseWriter, r *http.Request) {
+func handleReading(w http.ResponseWriter, r *http.Request) {
 	// Get date from query parameter, default to today
 	dateStr := r.URL.Query().Get("date")
 	if dateStr == "" {
@@ -329,8 +330,8 @@ func handleVerses(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch verse content from ESV API
-	verseContents, err := esv.FetchVerses(dailyText.Verses)
+	// Fetch verse content from ESV API (using cache)
+	verseContents, err := fetchPassagesWithCache(dailyText.Verses)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error fetching verses for %s", dateStr), http.StatusInternalServerError)
 		return
@@ -398,6 +399,17 @@ func initDB() error {
 
 	if _, err := db.Exec(createJournalSQL); err != nil {
 		return fmt.Errorf("failed to create journal table: %w", err)
+	}
+
+	// Create esv_cache table
+	createCacheSQL := `
+	CREATE TABLE IF NOT EXISTS esv_cache (
+		reference TEXT PRIMARY KEY,
+		content TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);`
+	if _, err := db.Exec(createCacheSQL); err != nil {
+		return fmt.Errorf("failed to create esv_cache table: %w", err)
 	}
 
 	slog.Info("database initialized successfully")
@@ -588,4 +600,50 @@ func getUserFromSession(token string) (*User, error) {
 	}
 
 	return &user, nil
+}
+
+// fetchPassagesWithCache fetches verses from the cache or the ESV API
+func fetchPassagesWithCache(references []string) (esv.EsvResponse, error) {
+	key := strings.Join(references, ";")
+	var response esv.EsvResponse
+	var content string
+
+	// 1. Check cache
+	err := db.QueryRow("SELECT content FROM esv_cache WHERE reference = ?", key).Scan(&content)
+	if err == nil {
+		// Cache hit
+		if err := json.Unmarshal([]byte(content), &response); err != nil {
+			// If unmarshal fails, log it and fall back to fetch
+			slog.Error("failed to unmarshal cached ESV response", "error", err)
+		} else {
+			slog.Debug("cache hit for verses", "reference", key)
+			return response, nil
+		}
+	} else if err != sql.ErrNoRows {
+		// Log DB error but proceed to fetch
+		slog.Error("failed to query esv_cache", "error", err)
+	}
+
+	// 2. Fetch from API
+	response, err = esv.FetchPassages(references)
+	if err != nil {
+		return response, err
+	}
+
+	// 3. Save to cache
+	responseBytes, err := json.Marshal(response)
+	if err != nil {
+		slog.Error("failed to marshal ESV response for cache", "error", err)
+		return response, nil // Return successful fetch even if cache save fails
+	}
+
+	// Use INSERT OR REPLACE to update if somehow exists (though we checked)
+	_, err = db.Exec("INSERT OR REPLACE INTO esv_cache (reference, content) VALUES (?, ?)", key, string(responseBytes))
+	if err != nil {
+		slog.Error("failed to save to esv_cache", "error", err)
+	} else {
+		slog.Debug("saved verses to cache", "reference", key)
+	}
+
+	return response, nil
 }

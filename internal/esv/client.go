@@ -30,8 +30,8 @@ type EsvResponse struct {
 	Copyright   string        `json:"copyright"`
 }
 
-// FetchVerses fetches verses from the ESV API.
-func FetchVerses(references []string) (EsvResponse, error) {
+// FetchPassages fetches verses from the ESV API.
+func FetchPassages(references []string) (EsvResponse, error) {
 	// See https://api.esv.org/docs/passage-html/ for API documentation.
 	apiURL := "https://api.esv.org/v3/passage/html/"
 	params := url.Values{}
