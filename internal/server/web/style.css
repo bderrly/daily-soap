@@ -65,6 +65,14 @@ p {
     font-size: 0.95rem;
 }
 
+p.same-paragraph {
+    text-indent: 0;
+}
+
+p:not(.line) {
+    text-indent: 2rem;
+}
+
 .daily-reading {
     margin-top: 2rem;
 }

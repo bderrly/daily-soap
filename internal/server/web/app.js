@@ -29,8 +29,10 @@
     };
 
     // Parse verse ID (format: v23063008-1 where 23=book, 063=chapter, 008=verse)
+    // Parse verse ID (format: 23063008)
     function parseVerseId(verseId) {
-        const match = verseId.match(/^[vp](\d{2})(\d{3})(\d{3})/);
+        // Strict format: 8 digits
+        const match = verseId.match(/^(\d{2})(\d{3})(\d{3})$/);
         if (!match) return null;
         return {
             book: parseInt(match[1], 10),
@@ -42,44 +44,30 @@
 
     // Get verse info from a verse element
     function getVerseInfo(element) {
-        // Check if element itself has verse ID
-        if (element.id && (element.id.startsWith('v') || element.id.startsWith('p'))) {
-            const info = parseVerseId(element.id);
-            if (info) return info;
+        // 1. Check for data-ref on the element itself or ancestors
+        const refElement = element.closest('[data-ref]');
+        if (refElement) {
+            const ref = refElement.dataset.ref;
+            return parseVerseId(ref);
         }
 
-        // Traverse up the DOM tree to find verse ID in parent elements
-        let current = element;
-        while (current && current !== document.body) {
-            if (current.id && (current.id.startsWith('v') || current.id.startsWith('p'))) {
-                const info = parseVerseId(current.id);
-                if (info) return info;
-            }
-            current = current.parentElement;
-        }
-
-        // If we're inside a verse-content, find the closest preceding verse number
+        // 2. Positional fallback: look for preceding verse number (only using .verse-num)
         const verseContent = element.closest('.verse-content');
         if (verseContent) {
             // Get all verse number elements in this container
-            const allVerseNums = Array.from(verseContent.querySelectorAll('[id^="v"], [id^="p"]'));
+            const allVerseNums = Array.from(verseContent.querySelectorAll('.verse-num'));
 
             if (allVerseNums.length > 0) {
-                // Find the verse number that comes before this element in document order
-                // and is closest to it (comes latest before the element)
+                // Find the verse number that comes before this element
                 let bestVerseNum = null;
 
                 for (const verseNum of allVerseNums) {
                     const position = element.compareDocumentPosition(verseNum);
-                    // Check if verseNum comes before the element (or the element is a descendant)
                     if (position & Node.DOCUMENT_POSITION_PRECEDING ||
                         position & Node.DOCUMENT_POSITION_CONTAINS) {
-                        // This verse number could be the one
                         if (!bestVerseNum) {
                             bestVerseNum = verseNum;
                         } else {
-                            // Check if this verseNum comes after bestVerseNum
-                            // If so, it's closer to the clicked element
                             const bestPos = bestVerseNum.compareDocumentPosition(verseNum);
                             if (bestPos & Node.DOCUMENT_POSITION_FOLLOWING) {
                                 bestVerseNum = verseNum;
@@ -88,14 +76,16 @@
                     }
                 }
 
-                if (bestVerseNum && bestVerseNum.id) {
-                    return parseVerseId(bestVerseNum.id);
+                if (bestVerseNum) {
+                    // Try to get info from the best verse number found
+                    // It should be a descendant of a [data-ref] span
+                    return getVerseInfo(bestVerseNum);
                 }
 
                 // Fallback: use the first verse number if nothing found
                 const firstVerseNum = allVerseNums[0];
-                if (firstVerseNum && firstVerseNum.id) {
-                    return parseVerseId(firstVerseNum.id);
+                if (firstVerseNum) {
+                     return getVerseInfo(firstVerseNum);
                 }
             }
         }
@@ -179,10 +169,9 @@
         }
     }
 
-    // Get the base verse ID (without suffix like "-1")
+    // Get the base verse ID (8 digits)
     function getBaseVerseId(verseId) {
-        const match = verseId.match(/^([vp]\d{8})/);
-        return match ? match[1] : verseId;
+        return verseId; // Already simple digits in this system
     }
 
     // Toggle verse selection
@@ -198,7 +187,8 @@
             selectedVerseIds.splice(index, 1);
             removeVerseHighlight(baseId);
         } else {
-            // Select - use the actual verse ID we found
+            // Select - ensure we use the base ID (digits only) or whatever format we prefer
+            // Currently using the returned ID which might be just digits now
             selectedVerseIds.push(verseInfo.id);
             highlightVerse(verseInfo.id);
         }
@@ -209,22 +199,17 @@
 
     // Highlight a verse
     function highlightVerse(verseId) {
-        const baseId = getBaseVerseId(verseId);
-        // Find all elements with IDs starting with the base verse ID (spans for prose, b for poetry markers)
-        const allElements = document.querySelectorAll('span[id^="' + baseId + '"], b[id^="' + baseId + '"]');
-        allElements.forEach(el => {
-            el.classList.add('verse-selected');
-        });
+        const baseId = getBaseVerseId(verseId); // Get 8 digit ref
+        // Select by data-ref
+        const elements = document.querySelectorAll(`[data-ref="${baseId}"]`);
+        elements.forEach(el => el.classList.add('verse-selected'));
     }
 
     // Remove verse highlight
     function removeVerseHighlight(verseId) {
         const baseId = getBaseVerseId(verseId);
-        // Find all elements with IDs starting with the base verse ID (spans for prose, b for poetry markers)
-        const allElements = document.querySelectorAll('span[id^="' + baseId + '"], b[id^="' + baseId + '"]');
-        allElements.forEach(el => {
-            el.classList.remove('verse-selected');
-        });
+        const elements = document.querySelectorAll(`[data-ref="${baseId}"]`);
+        elements.forEach(el => el.classList.remove('verse-selected'));
     }
 
 
