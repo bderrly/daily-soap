@@ -21,8 +21,13 @@ func main() {
 
 	mux := server.Muxer()
 
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
 	srv := http.Server{
-		Addr:    ":42069",
+		Addr:    ":" + port,
 		Handler: mux,
 	}
 
@@ -40,6 +45,7 @@ func main() {
 		close(idleConns)
 	}()
 
+	slog.Info("starting server", "addr", srv.Addr)
 	if err := srv.ListenAndServe(); err != nil {
 		slog.Error("http server died", "error", err)
 		os.Exit(1)
