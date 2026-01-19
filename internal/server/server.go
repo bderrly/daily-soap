@@ -18,6 +18,7 @@ import (
 
 	"derrclan.com/moravian-soap/internal/cache_expunger"
 	"derrclan.com/moravian-soap/internal/dailytexts"
+	"derrclan.com/moravian-soap/internal/email"
 	"derrclan.com/moravian-soap/internal/esv"
 	"golang.org/x/crypto/bcrypt"
 
@@ -37,8 +38,9 @@ type contextKey string
 const userContextKey contextKey = "user"
 
 type User struct {
-	ID    int64
-	Email string
+	ID         int64
+	Email      string
+	IsVerified bool
 }
 
 func init() {
@@ -47,7 +49,7 @@ func init() {
 		"safeHTML": func(s string) template.HTML {
 			return template.HTML(s)
 		},
-		"toJSON": func(v interface{}) (template.JS, error) {
+		"toJSON": func(v any) (template.JS, error) {
 			b, err := json.Marshal(v)
 			if err != nil {
 				return "", err
@@ -70,6 +72,7 @@ func Muxer() *http.ServeMux {
 	// Public routes
 	mux.HandleFunc("/login", handleLogin)
 	mux.HandleFunc("/register", handleRegister)
+	mux.HandleFunc("/confirm", handleConfirm)
 	mux.HandleFunc("/logout", handleLogout)
 
 	// Protected routes
@@ -125,7 +128,7 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 func handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		if err := tmpl.ExecuteTemplate(w, "login.html", map[string]interface{}{"IsLogin": true}); err != nil {
+		if err := tmpl.ExecuteTemplate(w, "login.html", map[string]any{"IsLogin": true}); err != nil {
 			slog.Error("failed to execute login template", "error", err)
 		}
 		return
@@ -137,7 +140,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 		user, err := authenticateUser(email, password)
 		if err != nil {
-			data := map[string]interface{}{
+			data := map[string]any{
 				"IsLogin": true,
 				"Error":   "Invalid email or password",
 				"Email":   email,
@@ -168,21 +171,21 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 func handleRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		if err := tmpl.ExecuteTemplate(w, "login.html", map[string]interface{}{"IsLogin": false}); err != nil {
+		if err := tmpl.ExecuteTemplate(w, "login.html", map[string]any{"IsLogin": false}); err != nil {
 			slog.Error("failed to execute register template", "error", err)
 		}
 		return
 	}
 
 	if r.Method == http.MethodPost {
-		email := r.FormValue("email")
+		emailStr := r.FormValue("email")
 		password := r.FormValue("password")
 
-		if email == "" || password == "" {
-			data := map[string]interface{}{
+		if emailStr == "" || password == "" {
+			data := map[string]any{
 				"IsLogin": false,
 				"Error":   "Email and password are required",
-				"Email":   email,
+				"Email":   emailStr,
 			}
 			if err := tmpl.ExecuteTemplate(w, "login.html", data); err != nil {
 				slog.Error("failed to execute register template", "error", err)
@@ -190,41 +193,94 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if err := createUser(email, password); err != nil {
-			slog.Error("failed to create user", "error", err)
-			data := map[string]interface{}{
-				"IsLogin": false,
-				"Error":   "Failed to create user. Email may already be in use.",
-				"Email":   email,
-			}
-			if err := tmpl.ExecuteTemplate(w, "login.html", data); err != nil {
-				slog.Error("failed to execute register template", "error", err)
-			}
-			return
-		}
-
-		// Auto login after registration
-		user, err := authenticateUser(email, password)
-		if err != nil {
-			http.Redirect(w, r, "/login", http.StatusFound)
-			return
-		}
-
-		sessionToken, err := createSession(user.ID)
-		if err != nil {
+		// Generate verification token
+		tokenBytes := make([]byte, 32)
+		if _, err := rand.Read(tokenBytes); err != nil {
+			slog.Error("failed to generate verification token", "error", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return
 		}
+		token := base64.URLEncoding.EncodeToString(tokenBytes)
 
-		http.SetCookie(w, &http.Cookie{
-			Name:     "session_token",
-			Value:    sessionToken,
-			Path:     "/",
-			HttpOnly: true,
-			Expires:  time.Now().Add(24 * time.Hour * 30),
-		})
+		if err := createUser(emailStr, password, token); err != nil {
+			slog.Error("failed to create user", "error", err)
+			data := map[string]any{
+				"IsLogin": false,
+				"Error":   "Failed to create user. Email may already be in use.",
+				"Email":   emailStr,
+			}
+			if err := tmpl.ExecuteTemplate(w, "login.html", data); err != nil {
+				slog.Error("failed to execute register template", "error", err)
+			}
+			return
+		}
 
-		http.Redirect(w, r, "/", http.StatusFound)
+		// Send welcome email
+		baseURL := os.Getenv("BASE_URL")
+		if baseURL == "" {
+			baseURL = "http://localhost:8080"
+		}
+		confirmationURL := fmt.Sprintf("%s/confirm?token=%s", baseURL, token)
+
+		if err := email.SendWelcomeEmail(emailStr, confirmationURL); err != nil {
+			slog.Error("failed to send welcome email", "error", err)
+			// User created but email failed. They can't login.
+			// Ideally we'd rollback or have a "resend" option.
+			// For now, show error.
+			data := map[string]any{
+				"IsLogin": false,
+				"Error":   "User created but failed to send verification email. Please contact support.",
+				"Email":   emailStr,
+			}
+			if err := tmpl.ExecuteTemplate(w, "login.html", data); err != nil {
+				slog.Error("failed to execute register template", "error", err)
+			}
+			return
+		}
+
+		// Show success message
+		data := map[string]any{
+			"IsLogin": true, // Switch to login view
+			"Success": "Registration successful! Please check your email to confirm your account.",
+		}
+		if err := tmpl.ExecuteTemplate(w, "login.html", data); err != nil {
+			slog.Error("failed to execute login template", "error", err)
+		}
+	}
+}
+
+func handleConfirm(w http.ResponseWriter, r *http.Request) {
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		http.Error(w, "Verification token missing from URL", http.StatusBadRequest)
+		return
+	}
+
+	result, err := db.Exec("UPDATE users SET is_verified = 1, verification_token = NULL WHERE verification_token = ?", token)
+	if err != nil {
+		slog.Error("failed to verify user", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		data := map[string]any{
+			"IsLogin": true,
+			"Error":   "Invalid or expired verification token.",
+		}
+		if err := tmpl.ExecuteTemplate(w, "login.html", data); err != nil {
+			slog.Error("failed to execute login template", "error", err)
+		}
+		return
+	}
+
+	data := map[string]any{
+		"IsLogin": true,
+		"Success": "Email verified! You can now log in.",
+	}
+	if err := tmpl.ExecuteTemplate(w, "login.html", data); err != nil {
+		slog.Error("failed to execute login template", "error", err)
 	}
 }
 
@@ -366,7 +422,9 @@ func InitDB() error {
 	CREATE TABLE IF NOT EXISTS users (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		email TEXT UNIQUE NOT NULL,
-		password_hash TEXT NOT NULL
+		password_hash TEXT NOT NULL,
+		is_verified INTEGER DEFAULT 0,
+		verification_token TEXT
 	);`
 	if _, err := db.Exec(createUsersSQL); err != nil {
 		return fmt.Errorf("failed to create users table: %w", err)
@@ -544,20 +602,21 @@ func saveSOAPData(userID int64, soapData *SOAPData) error {
 
 // User registration and authentication helpers
 
-func createUser(email, password string) error {
+func createUser(email, password, token string) error {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
 
-	_, err = db.Exec("INSERT INTO users (email, password_hash) VALUES (?, ?)", email, string(hashedPassword))
+	_, err = db.Exec("INSERT INTO users (email, password_hash, is_verified, verification_token) VALUES (?, ?, 0, ?)", email, string(hashedPassword), token)
 	return err
 }
 
 func authenticateUser(email, password string) (*User, error) {
 	var id int64
 	var passwordHash string
-	err := db.QueryRow("SELECT id, password_hash FROM users WHERE email = ?", email).Scan(&id, &passwordHash)
+	var isVerified bool
+	err := db.QueryRow("SELECT id, password_hash, is_verified FROM users WHERE email = ?", email).Scan(&id, &passwordHash, &isVerified)
 	if err != nil {
 		return nil, err
 	}
@@ -566,7 +625,11 @@ func authenticateUser(email, password string) (*User, error) {
 		return nil, err
 	}
 
-	return &User{ID: id, Email: email}, nil
+	if !isVerified {
+		return nil, fmt.Errorf("email not verified")
+	}
+
+	return &User{ID: id, Email: email, IsVerified: isVerified}, nil
 }
 
 func createSession(userID int64) (string, error) {
@@ -590,12 +653,12 @@ func getUserFromSession(token string) (*User, error) {
 	var expiresAt time.Time
 
 	query := `
-		SELECT u.id, u.email, s.expires_at 
+		SELECT u.id, u.email, u.is_verified, s.expires_at 
 		FROM sessions s 
 		JOIN users u ON s.user_id = u.id 
 		WHERE s.token = ?`
 
-	err := db.QueryRow(query, token).Scan(&user.ID, &user.Email, &expiresAt)
+	err := db.QueryRow(query, token).Scan(&user.ID, &user.Email, &user.IsVerified, &expiresAt)
 	if err != nil {
 		return nil, err
 	}

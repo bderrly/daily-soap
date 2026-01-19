@@ -32,3 +32,6 @@ vendor/
 
 # Temporary files
 tmp/
+
+# Dev testing data
+data/
