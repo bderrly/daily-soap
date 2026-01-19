@@ -14,6 +14,10 @@ import (
 
 func main() {
 	_ = godotenv.Load()
+	if err := server.InitDB(); err != nil {
+		slog.Error("failed to initialize database", "error", err)
+		os.Exit(1)
+	}
 
 	opts := &slog.HandlerOptions{Level: slog.LevelDebug}
 	handler := slog.NewTextHandler(os.Stderr, opts)

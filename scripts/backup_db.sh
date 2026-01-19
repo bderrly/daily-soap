@@ -9,10 +9,10 @@ TIMESTAMP=$(date "+%FT%T")
 
 BACKUP_FILE="${OUTPUT_DIR}/journal_${TIMESTAMP}.db"
 
-DB_FILE="journal.db"
+DB_FILE="${DB_PATH:-/data/journal.db}"
 
 if [ ! -f "$DB_FILE" ]; then
-    echo "Error: Database file '$DB_FILE' not found in current directory."
+    echo "Error: Database file '$DB_FILE' not found."
     exit 1
 fi
 

@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -41,11 +42,6 @@ type User struct {
 }
 
 func init() {
-	// Initialize database
-	if err := initDB(); err != nil {
-		slog.Error("failed to initialize database", "error", err)
-	}
-
 	// Parse templates with function map for safe HTML rendering
 	funcMap := template.FuncMap{
 		"safeHTML": func(s string) template.HTML {
@@ -352,13 +348,17 @@ func handleReading(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// initDB initializes the SQLite database and creates the necessary table.
-// The database file will be created at "journal.db" in the current directory.
-func initDB() error {
+// InitDB initializes the SQLite database and creates the necessary table.
+func InitDB() error {
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "/data/journal.db"
+	}
+
 	var err error
-	db, err = sql.Open("sqlite3", "journal.db")
+	db, err = sql.Open("sqlite3", dbPath)
 	if err != nil {
-		return fmt.Errorf("failed to open database: %w", err)
+		return fmt.Errorf("failed to open database at %s: %w", dbPath, err)
 	}
 
 	// Create users table
