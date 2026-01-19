@@ -18,7 +18,7 @@ type EsvResponse struct {
 
 func TestVersesTemplate(t *testing.T) {
 	// Mock data
-	data := map[string]interface{}{
+	data := map[string]any{
 		"esvData": EsvResponse{
 			Passages:  []string{"<p>Verse 1</p>", "<p>Verse 2</p>"},
 			Copyright: "ESV Copyright",
