@@ -377,8 +377,9 @@ p:not(.line) {
     display: flex;
     justify-content: center;
     margin-bottom: 2rem;
+}
 
-}.success-message {
+.success-message {
     background-color: #d4edda;
     color: #155724;
     padding: 0.75rem;
@@ -386,4 +387,32 @@ p:not(.line) {
     border-radius: 4px;
     border: 1px solid #c3e6cb;
     font-size: 0.9rem;
+}
+
+.forgot-password-container {
+    text-align: right;
+    margin-bottom: 1rem;
+}
+
+.forgot-password-link {
+    font-size: 0.9rem;
+    color: #4A6FA5;
+    text-decoration: none;
+}
+
+.forgot-password-link:hover {
+    text-decoration: underline;
+}
+
+.auth-back-link {
+    margin-top: 1.5rem;
+    display: block;
+    color: #7f8c8d;
+    text-decoration: none;
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+.auth-back-link:hover {
+    text-decoration: underline;
 }

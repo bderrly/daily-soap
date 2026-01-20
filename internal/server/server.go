@@ -73,6 +73,8 @@ func Muxer() *http.ServeMux {
 	mux.HandleFunc("/login", handleLogin)
 	mux.HandleFunc("/register", handleRegister)
 	mux.HandleFunc("/confirm", handleConfirm)
+	mux.HandleFunc("/forgot-password", handleForgotPassword)
+	mux.HandleFunc("/reset-password", handleResetPassword)
 	mux.HandleFunc("/logout", handleLogout)
 
 	// Protected routes
@@ -222,7 +224,11 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		}
 		confirmationURL := fmt.Sprintf("%s/confirm?token=%s", baseURL, token)
 
-		if err := email.SendWelcomeEmail(emailStr, confirmationURL); err != nil {
+		client, err := email.GetClient()
+		if err == nil {
+			err = client.SendWelcomeEmail(emailStr, confirmationURL)
+		}
+		if err != nil {
 			slog.Error("failed to send welcome email", "error", err)
 			// User created but email failed. They can't login.
 			// Ideally we'd rollback or have a "resend" option.
@@ -281,6 +287,171 @@ func handleConfirm(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := tmpl.ExecuteTemplate(w, "login.html", data); err != nil {
 		slog.Error("failed to execute login template", "error", err)
+	}
+}
+
+func handleForgotPassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		if err := tmpl.ExecuteTemplate(w, "forgot_password.html", nil); err != nil {
+			slog.Error("failed to execute forgot_password template", "error", err)
+		}
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		emailStr := r.FormValue("email")
+		if emailStr == "" {
+			if err := tmpl.ExecuteTemplate(w, "forgot_password.html", map[string]any{"Error": "Email is required"}); err != nil {
+				slog.Error("failed to execute forgot_password template", "error", err)
+			}
+			return
+		}
+
+		// Check if user exists (generic success message regardless)
+		var id int64
+		err := db.QueryRow("SELECT id FROM users WHERE email = ?", emailStr).Scan(&id)
+		if err == sql.ErrNoRows {
+			// User not found - pretend we sent it
+			data := map[string]any{"Success": "If an account exists for that email, a password reset link has been sent."}
+			if err := tmpl.ExecuteTemplate(w, "forgot_password.html", data); err != nil {
+				slog.Error("failed to execute forgot_password template", "error", err)
+			}
+			return
+		} else if err != nil {
+			slog.Error("failed to query user for password reset", "error", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		// Generate reset token
+		tokenBytes := make([]byte, 32)
+		if _, err := rand.Read(tokenBytes); err != nil {
+			slog.Error("failed to generate reset token", "error", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+		token := base64.URLEncoding.EncodeToString(tokenBytes)
+		expiresAt := time.Now().Add(1 * time.Hour)
+
+		// Save token
+		_, err = db.Exec("INSERT INTO password_reset_tokens (token, user_id, expires_at) VALUES (?, ?, ?)", token, id, expiresAt)
+		if err != nil {
+			slog.Error("failed to save reset token", "error", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		// Send email
+		baseURL := os.Getenv("BASE_URL")
+		if baseURL == "" {
+			baseURL = "http://localhost:8080"
+		}
+		resetURL := fmt.Sprintf("%s/reset-password?token=%s", baseURL, token)
+
+		client, err := email.GetClient()
+		if err == nil {
+			err = client.SendPasswordResetEmail(emailStr, resetURL)
+		}
+		if err != nil {
+			slog.Error("failed to send password reset email", "error", err)
+			// Log the link for dev/debug if email fails
+			slog.Debug("Password reset link", "url", resetURL, "email", emailStr)
+			data := map[string]any{"Error": "Failed to send email. Please try again later."}
+			if err := tmpl.ExecuteTemplate(w, "forgot_password.html", data); err != nil {
+				slog.Error("failed to execute forgot_password template", "error", err)
+			}
+			return
+		}
+
+		data := map[string]any{"Success": "If an account exists for that email, a password reset link has been sent."}
+		if err := tmpl.ExecuteTemplate(w, "forgot_password.html", data); err != nil {
+			slog.Error("failed to execute forgot_password template", "error", err)
+		}
+	}
+}
+
+func handleResetPassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		token := r.URL.Query().Get("token")
+		if token == "" {
+			http.Error(w, "Invalid token", http.StatusBadRequest)
+			return
+		}
+
+		// Validate token
+		var userID int64
+		var expiresAt time.Time
+		err := db.QueryRow("SELECT user_id, expires_at FROM password_reset_tokens WHERE token = ?", token).Scan(&userID, &expiresAt)
+		if err != nil {
+			data := map[string]any{"Error": "Invalid or expired password reset link."}
+			// Just render login with error if token invalid
+			if err := tmpl.ExecuteTemplate(w, "login.html", data); err != nil {
+				slog.Error("failed to execute login template", "error", err)
+			}
+			return
+		}
+
+		if time.Now().After(expiresAt) {
+			data := map[string]any{"Error": "Password reset link has expired."}
+			if err := tmpl.ExecuteTemplate(w, "login.html", data); err != nil {
+				slog.Error("failed to execute login template", "error", err)
+			}
+			return
+		}
+
+		data := map[string]any{"Token": token}
+		if err := tmpl.ExecuteTemplate(w, "reset_password.html", data); err != nil {
+			slog.Error("failed to execute reset_password template", "error", err)
+		}
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		token := r.FormValue("token")
+		password := r.FormValue("password")
+
+		if token == "" || password == "" {
+			http.Error(w, "Missing token or password", http.StatusBadRequest)
+			return
+		}
+
+		// Validate token again
+		var userID int64
+		var expiresAt time.Time
+		err := db.QueryRow("SELECT user_id, expires_at FROM password_reset_tokens WHERE token = ?", token).Scan(&userID, &expiresAt)
+		if err != nil || time.Now().After(expiresAt) {
+			data := map[string]any{"Error": "Invalid or expired password reset link."}
+			if err := tmpl.ExecuteTemplate(w, "login.html", data); err != nil {
+				slog.Error("failed to execute login template", "error", err)
+			}
+			return
+		}
+
+		// Update password
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if err != nil {
+			slog.Error("failed to hash password", "error", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		_, err = db.Exec("UPDATE users SET password_hash = ? WHERE id = ?", string(hashedPassword), userID)
+		if err != nil {
+			slog.Error("failed to update password", "error", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		// Delete used token
+		db.Exec("DELETE FROM password_reset_tokens WHERE token = ?", token)
+
+		data := map[string]any{
+			"IsLogin": true,
+			"Success": "Password reset successfully! You can now log in.",
+		}
+		if err := tmpl.ExecuteTemplate(w, "login.html", data); err != nil {
+			slog.Error("failed to execute login template", "error", err)
+		}
 	}
 }
 
@@ -426,6 +597,7 @@ func InitDB() error {
 		is_verified INTEGER DEFAULT 0,
 		verification_token TEXT
 	);`
+
 	if _, err := db.Exec(createUsersSQL); err != nil {
 		return fmt.Errorf("failed to create users table: %w", err)
 	}
@@ -438,6 +610,7 @@ func InitDB() error {
 		expires_at DATETIME NOT NULL,
 		FOREIGN KEY(user_id) REFERENCES users(id)
 	);`
+
 	if _, err := db.Exec(createSessionsSQL); err != nil {
 		return fmt.Errorf("failed to create sessions table: %w", err)
 	}
@@ -467,8 +640,22 @@ func InitDB() error {
 		content TEXT NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);`
+
 	if _, err := db.Exec(createCacheSQL); err != nil {
 		return fmt.Errorf("failed to create esv_cache table: %w", err)
+	}
+
+	// Create password_reset_tokens table
+	createResetTokensSQL := `
+	CREATE TABLE IF NOT EXISTS password_reset_tokens (
+		token TEXT PRIMARY KEY,
+		user_id INTEGER NOT NULL,
+		expires_at DATETIME NOT NULL,
+		FOREIGN KEY(user_id) REFERENCES users(id)
+	);`
+
+	if _, err := db.Exec(createResetTokensSQL); err != nil {
+		return fmt.Errorf("failed to create password_reset_tokens table: %w", err)
 	}
 
 	slog.Info("database initialized successfully")
