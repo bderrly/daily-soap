@@ -416,3 +416,37 @@ p:not(.line) {
 .auth-back-link:hover {
     text-decoration: underline;
 }
+
+.site-footer {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #e0e6ed;
+    color: #666;
+    font-size: 0.85rem;
+    text-align: center;
+}
+
+.site-footer-content {
+    display: flex;
+    justify-content: center;
+    gap: 1.5rem;
+    align-items: center;
+}
+
+.site-footer a {
+    color: #4A6FA5;
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.site-footer a:hover {
+    color: #3b5a84;
+    text-decoration: underline;
+}
+
+@media (max-width: 600px) {
+    .site-footer-content {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+}
