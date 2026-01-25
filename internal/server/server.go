@@ -20,6 +20,7 @@ import (
 	"derrclan.com/moravian-soap/internal/dailytexts"
 	"derrclan.com/moravian-soap/internal/email"
 	"derrclan.com/moravian-soap/internal/esv"
+	"derrclan.com/moravian-soap/internal/migrations"
 	"golang.org/x/crypto/bcrypt"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -575,11 +576,11 @@ func handleReading(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// InitDB initializes the SQLite database and creates the necessary table.
+// InitDB initializes the SQLite database and applies migrations.
 func InitDB() error {
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath == "" {
-		dbPath = "/data/journal.db"
+		dbPath = "/data/app.db"
 	}
 
 	var err error
@@ -588,74 +589,9 @@ func InitDB() error {
 		return fmt.Errorf("failed to open database at %s: %w", dbPath, err)
 	}
 
-	// Create users table
-	createUsersSQL := `
-	CREATE TABLE IF NOT EXISTS users (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		email TEXT UNIQUE NOT NULL,
-		password_hash TEXT NOT NULL,
-		is_verified INTEGER DEFAULT 0,
-		verification_token TEXT
-	);`
-
-	if _, err := db.Exec(createUsersSQL); err != nil {
-		return fmt.Errorf("failed to create users table: %w", err)
-	}
-
-	// Create sessions table
-	createSessionsSQL := `
-	CREATE TABLE IF NOT EXISTS sessions (
-		token TEXT PRIMARY KEY,
-		user_id INTEGER NOT NULL,
-		expires_at DATETIME NOT NULL,
-		FOREIGN KEY(user_id) REFERENCES users(id)
-	);`
-
-	if _, err := db.Exec(createSessionsSQL); err != nil {
-		return fmt.Errorf("failed to create sessions table: %w", err)
-	}
-
-	// Create the journal table with user_id
-	createJournalSQL := `
-	CREATE TABLE IF NOT EXISTS journal (
-		user_id INTEGER NOT NULL,
-		date TEXT NOT NULL,
-		observation TEXT NOT NULL,
-		application TEXT NOT NULL,
-		prayer TEXT NOT NULL,
-		selected_verses TEXT,
-		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-		PRIMARY KEY (user_id, date),
-		FOREIGN KEY(user_id) REFERENCES users(id)
-	);`
-
-	if _, err := db.Exec(createJournalSQL); err != nil {
-		return fmt.Errorf("failed to create journal table: %w", err)
-	}
-
-	// Create esv_cache table
-	createCacheSQL := `
-	CREATE TABLE IF NOT EXISTS esv_cache (
-		reference TEXT PRIMARY KEY,
-		content TEXT NOT NULL,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);`
-
-	if _, err := db.Exec(createCacheSQL); err != nil {
-		return fmt.Errorf("failed to create esv_cache table: %w", err)
-	}
-
-	// Create password_reset_tokens table
-	createResetTokensSQL := `
-	CREATE TABLE IF NOT EXISTS password_reset_tokens (
-		token TEXT PRIMARY KEY,
-		user_id INTEGER NOT NULL,
-		expires_at DATETIME NOT NULL,
-		FOREIGN KEY(user_id) REFERENCES users(id)
-	);`
-
-	if _, err := db.Exec(createResetTokensSQL); err != nil {
-		return fmt.Errorf("failed to create password_reset_tokens table: %w", err)
+	// Run migrations
+	if err := migrations.Run(db); err != nil {
+		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
 	slog.Info("database initialized successfully")
