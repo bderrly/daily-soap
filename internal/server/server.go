@@ -16,6 +16,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	_ "time/tzdata"
 
 	"derrclan.com/moravian-soap/internal/cache_expunger"
 	"derrclan.com/moravian-soap/internal/dailytexts"
@@ -43,6 +44,7 @@ type User struct {
 	ID         int64
 	Email      string
 	IsVerified bool
+	Timezone   string
 }
 
 func init() {
@@ -141,6 +143,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		email := r.FormValue("email")
 		password := r.FormValue("password")
+		timezone := r.FormValue("timezone")
 
 		user, err := authenticateUser(email, password)
 		if err != nil {
@@ -153,6 +156,13 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 				slog.Error("failed to execute login template", "error", err)
 			}
 			return
+		}
+
+		// Update timezone if provided
+		if timezone != "" {
+			if _, err := db.Exec("UPDATE users SET timezone = ? WHERE id = ?", timezone, user.ID); err != nil {
+				slog.Error("failed to update user timezone", "error", err, "user_id", user.ID)
+			}
 		}
 
 		sessionToken, err := createSession(user.ID)
@@ -184,6 +194,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		emailStr := r.FormValue("email")
 		password := r.FormValue("password")
+		timezone := r.FormValue("timezone")
 
 		if emailStr == "" || password == "" {
 			data := map[string]any{
@@ -206,7 +217,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		}
 		token := base64.URLEncoding.EncodeToString(tokenBytes)
 
-		if err := createUser(emailStr, password, token); err != nil {
+		if err := createUser(emailStr, password, token, timezone); err != nil {
 			slog.Error("failed to create user", "error", err)
 			data := map[string]any{
 				"IsLogin": false,
@@ -476,8 +487,13 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get current date in YYYY-MM-DD format
-	today := time.Now().Format("2006-01-02")
+	// Get current date in YYYY-MM-DD format based on user location
+	loc, err := time.LoadLocation(user.Timezone)
+	if err != nil {
+		slog.Error("failed to load user location", "timezone", user.Timezone, "error", err)
+		loc = time.UTC
+	}
+	today := time.Now().In(loc).Format(time.DateOnly)
 
 	// Get today's data (will load year file if needed)
 	dailyText, err := dailytexts.GetDailyText(today)
@@ -539,7 +555,14 @@ func handleReading(w http.ResponseWriter, r *http.Request) {
 	// Get date from query parameter, default to today
 	dateStr := r.URL.Query().Get("date")
 	if dateStr == "" {
-		dateStr = time.Now().Format("2006-01-02")
+		// Use user's timezone for default date
+		var loc *time.Location = time.UTC
+		if user, ok := r.Context().Value(userContextKey).(*User); ok {
+			if l, err := time.LoadLocation(user.Timezone); err == nil {
+				loc = l
+			}
+		}
+		dateStr = time.Now().In(loc).Format(time.DateOnly)
 	}
 
 	// Get daily text for the requested date
@@ -638,7 +661,7 @@ func handleGetSOAP(w http.ResponseWriter, r *http.Request) {
 	user := r.Context().Value(userContextKey).(*User)
 	dateStr := r.URL.Query().Get("date")
 	if dateStr == "" {
-		dateStr = time.Now().Format("2006-01-02")
+		dateStr = time.Now().Format(time.DateOnly)
 	}
 
 	soapData, err := getSOAPData(user.ID, dateStr)
@@ -735,13 +758,17 @@ func saveSOAPData(userID int64, soapData *SOAPData) error {
 
 // User registration and authentication helpers
 
-func createUser(email, password, token string) error {
+func createUser(email, password, token, timezone string) error {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
 
-	_, err = db.Exec("INSERT INTO users (email, password_hash, is_verified, verification_token) VALUES (?, ?, 0, ?)", email, string(hashedPassword), token)
+	if timezone == "" {
+		timezone = "UTC"
+	}
+
+	_, err = db.Exec("INSERT INTO users (email, password_hash, is_verified, verification_token, timezone) VALUES (?, ?, 0, ?, ?)", email, string(hashedPassword), token, timezone)
 	return err
 }
 
@@ -749,7 +776,8 @@ func authenticateUser(email, password string) (*User, error) {
 	var id int64
 	var passwordHash string
 	var isVerified bool
-	err := db.QueryRow("SELECT id, password_hash, is_verified FROM users WHERE email = ?", email).Scan(&id, &passwordHash, &isVerified)
+	var timezone string
+	err := db.QueryRow("SELECT id, password_hash, is_verified, timezone FROM users WHERE email = ?", email).Scan(&id, &passwordHash, &isVerified, &timezone)
 	if err != nil {
 		return nil, err
 	}
@@ -762,7 +790,7 @@ func authenticateUser(email, password string) (*User, error) {
 		return nil, fmt.Errorf("email not verified")
 	}
 
-	return &User{ID: id, Email: email, IsVerified: isVerified}, nil
+	return &User{ID: id, Email: email, IsVerified: isVerified, Timezone: timezone}, nil
 }
 
 func createSession(userID int64) (string, error) {
@@ -786,12 +814,12 @@ func getUserFromSession(token string) (*User, error) {
 	var expiresAt time.Time
 
 	query := `
-		SELECT u.id, u.email, u.is_verified, s.expires_at 
+		SELECT u.id, u.email, u.is_verified, u.timezone, s.expires_at 
 		FROM sessions s 
 		JOIN users u ON s.user_id = u.id 
 		WHERE s.token = ?`
 
-	err := db.QueryRow(query, token).Scan(&user.ID, &user.Email, &user.IsVerified, &expiresAt)
+	err := db.QueryRow(query, token).Scan(&user.ID, &user.Email, &user.IsVerified, &user.Timezone, &expiresAt)
 	if err != nil {
 		return nil, err
 	}

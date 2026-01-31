@@ -1,4 +1,17 @@
 (function () {
+    // Get timezone
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+    // If on login/register page, inject it into the form
+    const authForm = document.querySelector('.auth-form');
+    if (authForm) {
+        const tzInput = document.createElement('input');
+        tzInput.type = 'hidden';
+        tzInput.name = 'timezone';
+        tzInput.value = timezone;
+        authForm.appendChild(tzInput);
+    }
+
     // Get data from the page (set by inline script in HTML)
     let currentDate = window.SOAP_DATA?.date || '';
     const observationField = document.getElementById('observation');
@@ -159,6 +172,7 @@
 
     // Update verse reference display
     function updateVerseReference() {
+        if (!selectedVersesReference) return;
         const reference = formatVerseReference(selectedVerseIds);
         if (reference) {
             selectedVersesReference.textContent = reference;
@@ -287,17 +301,17 @@
 
     function loadDataForDate(dateStr) {
         // Show loading state?
-        observationField.value = 'Loading...';
-        applicationField.value = 'Loading...';
-        prayerField.value = 'Loading...';
+        if (observationField) observationField.value = 'Loading...';
+        if (applicationField) applicationField.value = 'Loading...';
+        if (prayerField) prayerField.value = 'Loading...';
 
         fetch(`/soap?date=${dateStr}`)
             .then(response => response.json())
             .then(data => {
                 // Update fields
-                observationField.value = data.observation || '';
-                applicationField.value = data.application || '';
-                prayerField.value = data.prayer || '';
+                if (observationField) observationField.value = data.observation || '';
+                if (applicationField) applicationField.value = data.application || '';
+                if (prayerField) prayerField.value = data.prayer || '';
 
                 // Update selected verses
                 selectedVerseIds = data.selectedVerses || [];
@@ -316,15 +330,15 @@
             })
             .catch(err => {
                 console.error('Failed to load data', err);
-                observationField.value = '';
-                applicationField.value = '';
-                prayerField.value = '';
+                if (observationField) observationField.value = '';
+                if (applicationField) applicationField.value = '';
+                if (prayerField) prayerField.value = '';
             });
     }
 
     function saveData(immediate = false) {
         // Guard against saving with empty date
-        if (!currentDate) {
+        if (!currentDate || !observationField) {
             return;
         }
 
@@ -341,8 +355,10 @@
             if (saveTimeout) clearTimeout(saveTimeout);
         }
 
-        saveStatus.textContent = 'Saving...';
-        saveStatus.className = 'save-status saving';
+        if (saveStatus) {
+            saveStatus.textContent = 'Saving...';
+            saveStatus.className = 'save-status saving';
+        }
 
         fetch('/soap', {
             method: 'POST',
@@ -354,23 +370,29 @@
             .then(response => response.json())
             .then(result => {
                 if (result.error) {
-                    saveStatus.textContent = 'Error saving';
-                    saveStatus.className = 'save-status error';
+                    if (saveStatus) {
+                        saveStatus.textContent = 'Error saving';
+                        saveStatus.className = 'save-status error';
+                    }
                 } else {
-                    saveStatus.textContent = 'Saved';
-                    saveStatus.className = 'save-status saved';
-                    setTimeout(() => {
-                        // Only clear if status hasn't changed since
-                        if (saveStatus.textContent === 'Saved') {
-                            saveStatus.textContent = '';
-                            saveStatus.className = 'save-status';
-                        }
-                    }, 2000);
+                    if (saveStatus) {
+                        saveStatus.textContent = 'Saved';
+                        saveStatus.className = 'save-status saved';
+                        setTimeout(() => {
+                            // Only clear if status hasn't changed since
+                            if (saveStatus.textContent === 'Saved') {
+                                saveStatus.textContent = '';
+                                saveStatus.className = 'save-status';
+                            }
+                        }, 2000);
+                    }
                 }
             })
             .catch(error => {
-                saveStatus.textContent = 'Error saving';
-                saveStatus.className = 'save-status error';
+                if (saveStatus) {
+                    saveStatus.textContent = 'Error saving';
+                    saveStatus.className = 'save-status error';
+                }
                 console.error('Error:', error);
             });
     }
@@ -382,7 +404,7 @@
         saveTimeout = setTimeout(saveData, SAVE_DELAY);
     }
 
-    observationField.addEventListener('input', scheduleSave);
-    applicationField.addEventListener('input', scheduleSave);
-    prayerField.addEventListener('input', scheduleSave);
+    if (observationField) observationField.addEventListener('input', scheduleSave);
+    if (applicationField) applicationField.addEventListener('input', scheduleSave);
+    if (prayerField) prayerField.addEventListener('input', scheduleSave);
 })();
