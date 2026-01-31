@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -583,8 +584,17 @@ func InitDB() error {
 		dbPath = "/data/app.db"
 	}
 
-	var err error
-	db, err = sql.Open("sqlite3", dbPath)
+	// Parse the DSN to safely append query parameters
+	u, err := url.Parse(dbPath)
+	if err != nil {
+		return fmt.Errorf("failed to parse database path: %w", err)
+	}
+
+	q := u.Query()
+	q.Set("_foreign_keys", "on")
+	u.RawQuery = q.Encode()
+
+	db, err = sql.Open("sqlite3", u.String())
 	if err != nil {
 		return fmt.Errorf("failed to open database at %s: %w", dbPath, err)
 	}
