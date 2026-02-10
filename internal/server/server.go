@@ -38,7 +38,11 @@ var web embed.FS
 
 type contextKey string
 
-const userContextKey contextKey = "user"
+const (
+	userContextKey  contextKey = "user"
+	csrfContextKey  contextKey = "csrf_token"
+	nonceContextKey contextKey = "nonce"
+)
 
 type User struct {
 	ID         int64
@@ -70,7 +74,7 @@ func init() {
 	}
 }
 
-func Muxer() *http.ServeMux {
+func Muxer() http.Handler {
 	mux := http.NewServeMux()
 
 	// Public routes
@@ -94,7 +98,69 @@ func Muxer() *http.ServeMux {
 		mux.Handle("/web/", http.StripPrefix("/web/", http.FileServer(http.FS(webFS))))
 	}
 
-	return mux
+	return securityMiddleware(csrfMiddleware(mux))
+}
+
+func securityMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		nonce := generateRandomString(16)
+		ctx := context.WithValue(r.Context(), nonceContextKey, nonce)
+
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+
+		// Content Security Policy with Nonce
+		csp := fmt.Sprintf("default-src 'self'; script-src 'self' 'nonce-%s'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'; upgrade-insecure-requests;", nonce)
+		w.Header().Set("Content-Security-Policy", csp)
+
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func csrfMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var token string
+		cookie, err := r.Cookie("csrf_token")
+		if err != nil {
+			token = generateRandomString(32)
+			http.SetCookie(w, &http.Cookie{
+				Name:     "csrf_token",
+				Value:    token,
+				Path:     "/",
+				HttpOnly: true,
+				Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+				SameSite: http.SameSiteLaxMode,
+			})
+		} else {
+			token = cookie.Value
+		}
+
+		if r.Method == http.MethodPost {
+			requestToken := r.Header.Get("X-CSRF-Token")
+			if requestToken == "" {
+				requestToken = r.FormValue("csrf_token")
+			}
+
+			if requestToken == "" || requestToken != token {
+				slog.Warn("invalid CSRF token", "method", r.Method, "path", r.URL.Path)
+				http.Error(w, "Invalid CSRF token", http.StatusForbidden)
+				return
+			}
+		}
+
+		ctx := context.WithValue(r.Context(), csrfContextKey, token)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func generateRandomString(n int) string {
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		slog.Error("failed to generate random string", "error", err)
+		return ""
+	}
+	return base64.URLEncoding.EncodeToString(b)
 }
 
 // authMiddleware checks for a valid session cookie and sets the user in the context
@@ -114,10 +180,13 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		if err != nil {
 			// Invalid session
 			http.SetCookie(w, &http.Cookie{
-				Name:   "session_token",
-				Value:  "",
-				Path:   "/",
-				MaxAge: -1,
+				Name:     "session_token",
+				Value:    "",
+				Path:     "/",
+				MaxAge:   -1,
+				HttpOnly: true,
+				Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+				SameSite: http.SameSiteLaxMode,
 			})
 			if r.URL.Path == "/" {
 				http.Redirect(w, r, "/login", http.StatusFound)
@@ -133,8 +202,15 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func handleLogin(w http.ResponseWriter, r *http.Request) {
+	csrfToken := r.Context().Value(csrfContextKey).(string)
+	nonce := r.Context().Value(nonceContextKey).(string)
 	if r.Method == http.MethodGet {
-		if err := tmpl.ExecuteTemplate(w, "login.html", map[string]any{"IsLogin": true}); err != nil {
+		data := map[string]any{
+			"IsLogin":   true,
+			"CSRFToken": csrfToken,
+			"Nonce":     nonce,
+		}
+		if err := tmpl.ExecuteTemplate(w, "login.html", data); err != nil {
 			slog.Error("failed to execute login template", "error", err)
 		}
 		return
@@ -148,9 +224,11 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		user, err := authenticateUser(email, password)
 		if err != nil {
 			data := map[string]any{
-				"IsLogin": true,
-				"Error":   "Invalid email or password",
-				"Email":   email,
+				"IsLogin":   true,
+				"Error":     "Invalid email or password",
+				"Email":     email,
+				"CSRFToken": csrfToken,
+				"Nonce":     nonce,
 			}
 			if err := tmpl.ExecuteTemplate(w, "login.html", data); err != nil {
 				slog.Error("failed to execute login template", "error", err)
@@ -176,6 +254,8 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			Value:    sessionToken,
 			Path:     "/",
 			HttpOnly: true,
+			Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+			SameSite: http.SameSiteLaxMode,
 			Expires:  time.Now().Add(24 * time.Hour * 30), // 30 days
 		})
 
@@ -184,8 +264,15 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleRegister(w http.ResponseWriter, r *http.Request) {
+	csrfToken := r.Context().Value(csrfContextKey).(string)
+	nonce := r.Context().Value(nonceContextKey).(string)
 	if r.Method == http.MethodGet {
-		if err := tmpl.ExecuteTemplate(w, "login.html", map[string]any{"IsLogin": false}); err != nil {
+		data := map[string]any{
+			"IsLogin":   false,
+			"CSRFToken": csrfToken,
+			"Nonce":     nonce,
+		}
+		if err := tmpl.ExecuteTemplate(w, "login.html", data); err != nil {
 			slog.Error("failed to execute register template", "error", err)
 		}
 		return
@@ -198,9 +285,11 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 
 		if emailStr == "" || password == "" {
 			data := map[string]any{
-				"IsLogin": false,
-				"Error":   "Email and password are required",
-				"Email":   emailStr,
+				"IsLogin":   false,
+				"Error":     "Email and password are required",
+				"Email":     emailStr,
+				"CSRFToken": csrfToken,
+				"Nonce":     nonce,
 			}
 			if err := tmpl.ExecuteTemplate(w, "login.html", data); err != nil {
 				slog.Error("failed to execute register template", "error", err)
@@ -220,9 +309,11 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		if err := createUser(emailStr, password, token, timezone); err != nil {
 			slog.Error("failed to create user", "error", err)
 			data := map[string]any{
-				"IsLogin": false,
-				"Error":   "Failed to create user. Email may already be in use.",
-				"Email":   emailStr,
+				"IsLogin":   false,
+				"Error":     "Failed to create user. Email may already be in use.",
+				"Email":     emailStr,
+				"CSRFToken": csrfToken,
+				"Nonce":     nonce,
 			}
 			if err := tmpl.ExecuteTemplate(w, "login.html", data); err != nil {
 				slog.Error("failed to execute register template", "error", err)
@@ -247,9 +338,11 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 			// Ideally we'd rollback or have a "resend" option.
 			// For now, show error.
 			data := map[string]any{
-				"IsLogin": false,
-				"Error":   "User created but failed to send verification email. Please contact support.",
-				"Email":   emailStr,
+				"IsLogin":   false,
+				"Error":     "User created but failed to send verification email. Please contact support.",
+				"Email":     emailStr,
+				"CSRFToken": csrfToken,
+				"Nonce":     nonce,
 			}
 			if err := tmpl.ExecuteTemplate(w, "login.html", data); err != nil {
 				slog.Error("failed to execute register template", "error", err)
@@ -259,8 +352,10 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 
 		// Show success message
 		data := map[string]any{
-			"IsLogin": true, // Switch to login view
-			"Success": "Registration successful! Please check your email to confirm your account.",
+			"IsLogin":   true, // Switch to login view
+			"Success":   "Registration successful! Please check your email to confirm your account.",
+			"CSRFToken": csrfToken,
+			"Nonce":     nonce,
 		}
 		if err := tmpl.ExecuteTemplate(w, "login.html", data); err != nil {
 			slog.Error("failed to execute login template", "error", err)
@@ -269,6 +364,8 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleConfirm(w http.ResponseWriter, r *http.Request) {
+	csrfToken := r.Context().Value(csrfContextKey).(string)
+	nonce := r.Context().Value(nonceContextKey).(string)
 	token := r.URL.Query().Get("token")
 	if token == "" {
 		http.Error(w, "Verification token missing from URL", http.StatusBadRequest)
@@ -285,8 +382,10 @@ func handleConfirm(w http.ResponseWriter, r *http.Request) {
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
 		data := map[string]any{
-			"IsLogin": true,
-			"Error":   "Invalid or expired verification token.",
+			"IsLogin":   true,
+			"Error":     "Invalid or expired verification token.",
+			"CSRFToken": csrfToken,
+			"Nonce":     nonce,
 		}
 		if err := tmpl.ExecuteTemplate(w, "login.html", data); err != nil {
 			slog.Error("failed to execute login template", "error", err)
@@ -295,8 +394,10 @@ func handleConfirm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]any{
-		"IsLogin": true,
-		"Success": "Email verified! You can now log in.",
+		"IsLogin":   true,
+		"Success":   "Email verified! You can now log in.",
+		"CSRFToken": csrfToken,
+		"Nonce":     nonce,
 	}
 	if err := tmpl.ExecuteTemplate(w, "login.html", data); err != nil {
 		slog.Error("failed to execute login template", "error", err)
@@ -304,8 +405,10 @@ func handleConfirm(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleForgotPassword(w http.ResponseWriter, r *http.Request) {
+	csrfToken := r.Context().Value(csrfContextKey).(string)
+	nonce := r.Context().Value(nonceContextKey).(string)
 	if r.Method == http.MethodGet {
-		if err := tmpl.ExecuteTemplate(w, "forgot_password.html", nil); err != nil {
+		if err := tmpl.ExecuteTemplate(w, "forgot_password.html", map[string]any{"CSRFToken": csrfToken, "Nonce": nonce}); err != nil {
 			slog.Error("failed to execute forgot_password template", "error", err)
 		}
 		return
@@ -314,7 +417,12 @@ func handleForgotPassword(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		emailStr := r.FormValue("email")
 		if emailStr == "" {
-			if err := tmpl.ExecuteTemplate(w, "forgot_password.html", map[string]any{"Error": "Email is required"}); err != nil {
+			data := map[string]any{
+				"Error":     "Email is required",
+				"CSRFToken": csrfToken,
+				"Nonce":     nonce,
+			}
+			if err := tmpl.ExecuteTemplate(w, "forgot_password.html", data); err != nil {
 				slog.Error("failed to execute forgot_password template", "error", err)
 			}
 			return
@@ -325,7 +433,11 @@ func handleForgotPassword(w http.ResponseWriter, r *http.Request) {
 		err := db.QueryRow("SELECT id FROM users WHERE email = ?", emailStr).Scan(&id)
 		if err == sql.ErrNoRows {
 			// User not found - pretend we sent it
-			data := map[string]any{"Success": "If an account exists for that email, a password reset link has been sent."}
+			data := map[string]any{
+				"Success":   "If an account exists for that email, a password reset link has been sent.",
+				"CSRFToken": csrfToken,
+				"Nonce":     nonce,
+			}
 			if err := tmpl.ExecuteTemplate(w, "forgot_password.html", data); err != nil {
 				slog.Error("failed to execute forgot_password template", "error", err)
 			}
@@ -369,14 +481,22 @@ func handleForgotPassword(w http.ResponseWriter, r *http.Request) {
 			slog.Error("failed to send password reset email", "error", err)
 			// Log the link for dev/debug if email fails
 			slog.Debug("Password reset link", "url", resetURL, "email", emailStr)
-			data := map[string]any{"Error": "Failed to send email. Please try again later."}
+			data := map[string]any{
+				"Error":     "Failed to send email. Please try again later.",
+				"CSRFToken": csrfToken,
+				"Nonce":     nonce,
+			}
 			if err := tmpl.ExecuteTemplate(w, "forgot_password.html", data); err != nil {
 				slog.Error("failed to execute forgot_password template", "error", err)
 			}
 			return
 		}
 
-		data := map[string]any{"Success": "If an account exists for that email, a password reset link has been sent."}
+		data := map[string]any{
+			"Success":   "If an account exists for that email, a password reset link has been sent.",
+			"CSRFToken": csrfToken,
+			"Nonce":     nonce,
+		}
 		if err := tmpl.ExecuteTemplate(w, "forgot_password.html", data); err != nil {
 			slog.Error("failed to execute forgot_password template", "error", err)
 		}
@@ -384,6 +504,8 @@ func handleForgotPassword(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleResetPassword(w http.ResponseWriter, r *http.Request) {
+	csrfToken := r.Context().Value(csrfContextKey).(string)
+	nonce := r.Context().Value(nonceContextKey).(string)
 	if r.Method == http.MethodGet {
 		token := r.URL.Query().Get("token")
 		if token == "" {
@@ -396,7 +518,11 @@ func handleResetPassword(w http.ResponseWriter, r *http.Request) {
 		var expiresAt time.Time
 		err := db.QueryRow("SELECT user_id, expires_at FROM password_reset_tokens WHERE token = ?", token).Scan(&userID, &expiresAt)
 		if err != nil {
-			data := map[string]any{"Error": "Invalid or expired password reset link."}
+			data := map[string]any{
+				"Error":     "Invalid or expired password reset link.",
+				"CSRFToken": csrfToken,
+				"Nonce":     nonce,
+			}
 			// Just render login with error if token invalid
 			if err := tmpl.ExecuteTemplate(w, "login.html", data); err != nil {
 				slog.Error("failed to execute login template", "error", err)
@@ -405,14 +531,22 @@ func handleResetPassword(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if time.Now().After(expiresAt) {
-			data := map[string]any{"Error": "Password reset link has expired."}
+			data := map[string]any{
+				"Error":     "Password reset link has expired.",
+				"CSRFToken": csrfToken,
+				"Nonce":     nonce,
+			}
 			if err := tmpl.ExecuteTemplate(w, "login.html", data); err != nil {
 				slog.Error("failed to execute login template", "error", err)
 			}
 			return
 		}
 
-		data := map[string]any{"Token": token}
+		data := map[string]any{
+			"Token":     token,
+			"CSRFToken": csrfToken,
+			"Nonce":     nonce,
+		}
 		if err := tmpl.ExecuteTemplate(w, "reset_password.html", data); err != nil {
 			slog.Error("failed to execute reset_password template", "error", err)
 		}
@@ -433,7 +567,11 @@ func handleResetPassword(w http.ResponseWriter, r *http.Request) {
 		var expiresAt time.Time
 		err := db.QueryRow("SELECT user_id, expires_at FROM password_reset_tokens WHERE token = ?", token).Scan(&userID, &expiresAt)
 		if err != nil || time.Now().After(expiresAt) {
-			data := map[string]any{"Error": "Invalid or expired password reset link."}
+			data := map[string]any{
+				"Error":     "Invalid or expired password reset link.",
+				"CSRFToken": csrfToken,
+				"Nonce":     nonce,
+			}
 			if err := tmpl.ExecuteTemplate(w, "login.html", data); err != nil {
 				slog.Error("failed to execute login template", "error", err)
 			}
@@ -459,8 +597,10 @@ func handleResetPassword(w http.ResponseWriter, r *http.Request) {
 		db.Exec("DELETE FROM password_reset_tokens WHERE token = ?", token)
 
 		data := map[string]any{
-			"IsLogin": true,
-			"Success": "Password reset successfully! You can now log in.",
+			"IsLogin":   true,
+			"Success":   "Password reset successfully! You can now log in.",
+			"CSRFToken": csrfToken,
+			"Nonce":     nonce,
 		}
 		if err := tmpl.ExecuteTemplate(w, "login.html", data); err != nil {
 			slog.Error("failed to execute login template", "error", err)
@@ -470,10 +610,13 @@ func handleResetPassword(w http.ResponseWriter, r *http.Request) {
 
 func handleLogout(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
-		Name:   "session_token",
-		Value:  "",
-		Path:   "/",
-		MaxAge: -1,
+		Name:     "session_token",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+		SameSite: http.SameSiteLaxMode,
 	})
 	http.Redirect(w, r, "/login", http.StatusFound)
 }
@@ -539,6 +682,8 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 		"prayer":         soapData.Prayer,
 		"selectedVerses": soapData.SelectedVerses,
 		"user":           user,
+		"CSRFToken":      r.Context().Value(csrfContextKey).(string),
+		"Nonce":          r.Context().Value(nonceContextKey).(string),
 	}
 
 	// Execute template

@@ -279,6 +279,13 @@
         }
     });
 
+    // Configure HTMX to include CSRF token
+    document.body.addEventListener('htmx:configRequest', (event) => {
+        if (window.SOAP_DATA?.csrfToken) {
+            event.detail.headers['X-CSRF-Token'] = window.SOAP_DATA.csrfToken;
+        }
+    });
+
     // Handle date changes
     if (datePicker) {
         datePicker.addEventListener('change', function (e) {
@@ -364,6 +371,7 @@
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'X-CSRF-Token': window.SOAP_DATA?.csrfToken
             },
             body: JSON.stringify(dataToSave)
         })

@@ -33,6 +33,7 @@
         {{end}}
 
         <form class="auth-form" method="POST" action="{{if .IsLogin}}/login{{else}}/register{{end}}">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
             <div class="form-group">
                 <label for="email">Email Address</label>
                 <input type="email" id="email" name="email" value="{{.Email}}" required autofocus>
@@ -68,7 +69,7 @@
             </div>
         </footer>
     </div>
-    <script src="/web/app.js"></script>
+    <script src="/web/app.js" nonce="{{.Nonce}}"></script>
 </body>
 
 </html>

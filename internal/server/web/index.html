@@ -59,15 +59,16 @@
             </div>
         </footer>
     </div>
-    <script>
+    <script nonce="{{.Nonce}}">
         // Initialize data for the external JavaScript file
         window.SOAP_DATA = {
             date: {{.date | printf "%s"}},
-            selectedVerses: {{if .selectedVerses}}{{.selectedVerses | toJSON}}{{else}} []{{end}}
+            selectedVerses: {{if .selectedVerses}}{{.selectedVerses | toJSON}}{{else}} []{{end}},
+            csrfToken: "{{.CSRFToken}}"
         };
     </script>
-    <script src="/web/htmx.min.js"></script>
-    <script src="/web/app.js"></script>
+    <script src="/web/htmx.min.js" nonce="{{.Nonce}}"></script>
+    <script src="/web/app.js" nonce="{{.Nonce}}"></script>
 </body>
 
 </html>
