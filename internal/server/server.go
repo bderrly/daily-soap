@@ -18,12 +18,12 @@ import (
 	"time"
 	_ "time/tzdata"
 
+	"derrclan.com/moravian-soap/internal/auth"
 	"derrclan.com/moravian-soap/internal/cache_expunger"
 	"derrclan.com/moravian-soap/internal/dailytexts"
 	"derrclan.com/moravian-soap/internal/email"
 	"derrclan.com/moravian-soap/internal/esv"
 	"derrclan.com/moravian-soap/internal/migrations"
-	"golang.org/x/crypto/bcrypt"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -579,14 +579,14 @@ func handleResetPassword(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Update password
-		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		hashedPassword, err := auth.HashPassword(password)
 		if err != nil {
 			slog.Error("failed to hash password", "error", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return
 		}
 
-		_, err = db.Exec("UPDATE users SET password_hash = ? WHERE id = ?", string(hashedPassword), userID)
+		_, err = db.Exec("UPDATE users SET password_hash = ? WHERE id = ?", hashedPassword, userID)
 		if err != nil {
 			slog.Error("failed to update password", "error", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -904,7 +904,7 @@ func saveSOAPData(userID int64, soapData *SOAPData) error {
 // User registration and authentication helpers
 
 func createUser(email, password, token, timezone string) error {
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hashedPassword, err := auth.HashPassword(password)
 	if err != nil {
 		return err
 	}
@@ -913,7 +913,7 @@ func createUser(email, password, token, timezone string) error {
 		timezone = "UTC"
 	}
 
-	_, err = db.Exec("INSERT INTO users (email, password_hash, is_verified, verification_token, timezone) VALUES (?, ?, 0, ?, ?)", email, string(hashedPassword), token, timezone)
+	_, err = db.Exec("INSERT INTO users (email, password_hash, is_verified, verification_token, timezone) VALUES (?, ?, 0, ?, ?)", email, hashedPassword, token, timezone)
 	return err
 }
 
@@ -927,8 +927,21 @@ func authenticateUser(email, password string) (*User, error) {
 		return nil, err
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password)); err != nil {
-		return nil, err
+	match, needsUpgrade, err := auth.VerifyPassword(password, passwordHash)
+	if err != nil || !match {
+		return nil, fmt.Errorf("invalid email or password")
+	}
+
+	if needsUpgrade {
+		newHash, err := auth.HashPassword(password)
+		if err == nil {
+			_, err = db.Exec("UPDATE users SET password_hash = ? WHERE id = ?", newHash, id)
+			if err != nil {
+				slog.Error("failed to migrate password hash", "user_id", id, "error", err)
+			}
+		} else {
+			slog.Error("failed to generate new hash for migration", "user_id", id, "error", err)
+		}
 	}
 
 	if !isVerified {
