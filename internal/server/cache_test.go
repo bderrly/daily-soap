@@ -6,8 +6,9 @@ import (
 	"reflect"
 	"testing"
 
-	"derrclan.com/moravian-soap/internal/esv"
 	_ "github.com/mattn/go-sqlite3"
+
+	"derrclan.com/moravian-soap/internal/esv"
 )
 
 func TestFetchPassagesWithCache_Hit(t *testing.T) {
