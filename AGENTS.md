@@ -7,3 +7,4 @@
 - Follow the Effective Go guidelines.
 - Prioritize standard library packages rather than custom code.
 - Always run `gofumpt` any .go files you modify.
+- Use "_test" packages whenever possible when writing unit tests.
