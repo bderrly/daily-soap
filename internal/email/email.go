@@ -48,7 +48,7 @@ func GetClient() (*Client, error) {
 }
 
 // send handles the actual email sending with exponential backoff retry logic.
-func (c *Client) send(recipient, subject, htmlBody string) error {
+func (c *Client) send(ctx context.Context, recipient, subject, htmlBody string) error {
 	message := mailgun.NewMessage(c.domain, c.sender, subject, "")
 	message.AddRecipient(recipient)
 	message.SetHTML(htmlBody)
@@ -58,8 +58,8 @@ func (c *Client) send(recipient, subject, htmlBody string) error {
 	backoff := time.Second
 
 	for i := range maxRetries {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-		_, lastErr = c.mg.Send(ctx, message)
+		sendCtx, cancel := context.WithTimeout(ctx, time.Second*10)
+		_, lastErr = c.mg.Send(sendCtx, message)
 		cancel()
 
 		if lastErr == nil {
@@ -67,8 +67,12 @@ func (c *Client) send(recipient, subject, htmlBody string) error {
 		}
 
 		if i < maxRetries-1 {
-			time.Sleep(backoff)
-			backoff *= 2
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(backoff):
+				backoff *= 2
+			}
 		}
 	}
 
@@ -76,7 +80,7 @@ func (c *Client) send(recipient, subject, htmlBody string) error {
 }
 
 // SendWelcomeEmail sends a welcome email using the client instance.
-func (c *Client) SendWelcomeEmail(recipientEmail, confirmationURL string) error {
+func (c *Client) SendWelcomeEmail(ctx context.Context, recipientEmail, confirmationURL string) error {
 	subject := "Welcome to your Daily SOAP Journal - Please Confirm Your Email"
 	body := fmt.Sprintf(`
 <html>
@@ -92,11 +96,11 @@ func (c *Client) SendWelcomeEmail(recipientEmail, confirmationURL string) error 
 </html>
 `, confirmationURL, confirmationURL)
 
-	return c.send(recipientEmail, subject, body)
+	return c.send(ctx, recipientEmail, subject, body)
 }
 
 // SendPasswordResetEmail sends a password reset email using the client instance.
-func (c *Client) SendPasswordResetEmail(recipientEmail, resetURL string) error {
+func (c *Client) SendPasswordResetEmail(ctx context.Context, recipientEmail, resetURL string) error {
 	subject := "Reset Your Password - Daily SOAP Journal"
 	body := fmt.Sprintf(`
 <html>
@@ -113,5 +117,5 @@ func (c *Client) SendPasswordResetEmail(recipientEmail, resetURL string) error {
 </html>
 `, resetURL, resetURL)
 
-	return c.send(recipientEmail, subject, body)
+	return c.send(ctx, recipientEmail, subject, body)
 }

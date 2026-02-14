@@ -1,6 +1,7 @@
 package cache_expunger
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"testing"
@@ -31,6 +32,8 @@ func TestExpunge_TimeLimit(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
+	ctx := context.TODO()
+
 	// Insert an old record (30 days ago)
 	_, err := db.Exec(`INSERT INTO esv_cache (reference, content, created_at) VALUES ('old', 'content', datetime('now', '-30 days'))`)
 	if err != nil {
@@ -44,7 +47,7 @@ func TestExpunge_TimeLimit(t *testing.T) {
 	}
 
 	// Run Expunge
-	if err := Expunge(db); err != nil {
+	if err := Expunge(ctx, db); err != nil {
 		t.Fatalf("Expunge failed: %v", err)
 	}
 
@@ -72,6 +75,8 @@ func TestExpunge_CountLimit(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
+	ctx := context.TODO()
+
 	// Insert 510 records
 	// Make them have different timestamps so we can predict which ones get deleted
 	// 10 oldest records (from 10 days ago)
@@ -91,7 +96,7 @@ func TestExpunge_CountLimit(t *testing.T) {
 	}
 
 	// Run Expunge
-	if err := Expunge(db); err != nil {
+	if err := Expunge(ctx, db); err != nil {
 		t.Fatalf("Expunge failed: %v", err)
 	}
 

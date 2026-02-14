@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"reflect"
@@ -46,7 +47,7 @@ func TestFetchPassagesWithCache_Hit(t *testing.T) {
 
 	// 4. Call function under test
 	// Note: fetchPassagesWithCache uses the global 'db' variable which we set above
-	result, err := fetchPassagesWithCache([]string{fakeRef})
+	result, err := fetchPassagesWithCache(context.TODO(), []string{fakeRef})
 	if err != nil {
 		t.Fatalf("fetchPassagesWithCache failed: %v", err)
 	}

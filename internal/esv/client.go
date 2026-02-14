@@ -1,6 +1,7 @@
 package esv
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -31,7 +32,7 @@ type EsvResponse struct {
 }
 
 // FetchPassages fetches verses from the ESV API.
-func FetchPassages(references []string) (EsvResponse, error) {
+func FetchPassages(ctx context.Context, references []string) (EsvResponse, error) {
 	// See https://api.esv.org/docs/passage-html/ for API documentation.
 	apiURL := "https://api.esv.org/v3/passage/html/"
 	params := url.Values{}
@@ -43,7 +44,7 @@ func FetchPassages(references []string) (EsvResponse, error) {
 
 	var apiResp EsvResponse
 
-	req, err := http.NewRequest("GET", apiURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
 	if err != nil {
 		return apiResp, fmt.Errorf("failed to create request: %w", err)
 	}

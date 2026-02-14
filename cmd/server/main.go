@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/joho/godotenv"
 
@@ -15,7 +16,11 @@ import (
 
 func main() {
 	_ = godotenv.Load()
-	if err := server.InitDB(); err != nil {
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := server.InitDB(ctx); err != nil {
 		slog.Error("failed to initialize database", "error", err)
 		os.Exit(1)
 	}
@@ -36,15 +41,19 @@ func main() {
 		Handler: mux,
 	}
 
-	ctx := context.Background()
-
 	idleConns := make(chan struct{})
 	go func() {
 		sigint := make(chan os.Signal, 1)
 		signal.Notify(sigint, os.Interrupt, syscall.SIGTERM)
 		<-sigint
 
-		if err := srv.Shutdown(ctx); err != nil {
+		slog.Info("shutting down server...")
+		cancel() // Signal background tasks to stop
+
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer shutdownCancel()
+
+		if err := srv.Shutdown(shutdownCtx); err != nil {
 			slog.Error("error shutting down http server", "error", err)
 		}
 		close(idleConns)

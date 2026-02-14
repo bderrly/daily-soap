@@ -1,6 +1,7 @@
 package cache_expunger
 
 import (
+	"context"
 	"database/sql"
 	"log/slog"
 	"time"
@@ -9,20 +10,26 @@ import (
 // Start initializes the cache expunger service.
 // It runs an initial expunge immediately in a background goroutine and then schedules
 // it to run every 24 hours.
-func Start(db *sql.DB) {
+func Start(ctx context.Context, db *sql.DB) {
 	go func() {
 		slog.Debug("starting initial cache expunge")
-		if err := Expunge(db); err != nil {
+		if err := Expunge(ctx, db); err != nil {
 			slog.Error("failed to expunge cache", "error", err)
 		}
 
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
 
-		for range ticker.C {
-			slog.Debug("starting scheduled cache expunge")
-			if err := Expunge(db); err != nil {
-				slog.Error("failed to expunge cache", "error", err)
+		for {
+			select {
+			case <-ticker.C:
+				slog.Debug("starting scheduled cache expunge")
+				if err := Expunge(ctx, db); err != nil {
+					slog.Error("failed to expunge cache", "error", err)
+				}
+			case <-ctx.Done():
+				slog.Info("stopping cache expunger service")
+				return
 			}
 		}
 	}()
@@ -32,18 +39,18 @@ func Start(db *sql.DB) {
 // It enforces two rules:
 // 1. Remove entries older than 28 days.
 // 2. Keep at most 500 entries (removing oldest first).
-func Expunge(db *sql.DB) error {
+func Expunge(ctx context.Context, db *sql.DB) error {
 	// 1. Time-based purge: remove entries older than 28 days
 	// SQLite 'now' is in UTC by default, make sure we use the same consistent time handling
 	// The table defaults created_at to CURRENT_TIMESTAMP which is UTC.
-	_, err := db.Exec("DELETE FROM esv_cache WHERE created_at < datetime('now', '-28 days')")
+	_, err := db.ExecContext(ctx, "DELETE FROM esv_cache WHERE created_at < datetime('now', '-28 days')")
 	if err != nil {
 		return err
 	}
 
 	// 2. Count-based purge: ensure not more than 500 entries
 	var count int
-	err = db.QueryRow("SELECT COUNT(*) FROM esv_cache").Scan(&count)
+	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM esv_cache").Scan(&count)
 	if err != nil {
 		return err
 	}
@@ -61,7 +68,7 @@ func Expunge(db *sql.DB) error {
 				LIMIT ?
 			)
 		`
-		_, err = db.Exec(query, limit)
+		_, err = db.ExecContext(ctx, query, limit)
 		if err != nil {
 			return err
 		}

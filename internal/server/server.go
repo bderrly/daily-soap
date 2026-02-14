@@ -176,7 +176,7 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		user, err := getUserFromSession(cookie.Value)
+		user, err := getUserFromSession(r.Context(), cookie.Value)
 		if err != nil {
 			// Invalid session
 			http.SetCookie(w, &http.Cookie{
@@ -221,8 +221,9 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		password := r.FormValue("password")
 		timezone := r.FormValue("timezone")
 
-		user, err := authenticateUser(email, password)
+		user, err := authenticateUser(r.Context(), email, password)
 		if err != nil {
+			slog.Error("authenticating user", "email", email, "error", err)
 			data := map[string]any{
 				"IsLogin":   true,
 				"Error":     "Invalid email or password",
@@ -238,12 +239,12 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 		// Update timezone if provided
 		if timezone != "" {
-			if _, err := db.Exec("UPDATE users SET timezone = ? WHERE id = ?", timezone, user.ID); err != nil {
+			if _, err := db.ExecContext(r.Context(), "UPDATE users SET timezone = ? WHERE id = ?", timezone, user.ID); err != nil {
 				slog.Error("failed to update user timezone", "error", err, "user_id", user.ID)
 			}
 		}
 
-		sessionToken, err := createSession(user.ID)
+		sessionToken, err := createSession(r.Context(), user.ID)
 		if err != nil {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return
@@ -306,7 +307,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		}
 		token := base64.URLEncoding.EncodeToString(tokenBytes)
 
-		if err := createUser(emailStr, password, token, timezone); err != nil {
+		if err := createUser(r.Context(), emailStr, password, token, timezone); err != nil {
 			slog.Error("failed to create user", "error", err)
 			data := map[string]any{
 				"IsLogin":   false,
@@ -330,7 +331,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 
 		client, err := email.GetClient()
 		if err == nil {
-			err = client.SendWelcomeEmail(emailStr, confirmationURL)
+			err = client.SendWelcomeEmail(r.Context(), emailStr, confirmationURL)
 		}
 		if err != nil {
 			slog.Error("failed to send welcome email", "error", err)
@@ -372,7 +373,7 @@ func handleConfirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := db.Exec("UPDATE users SET is_verified = 1, verification_token = NULL WHERE verification_token = ?", token)
+	result, err := db.ExecContext(r.Context(), "UPDATE users SET is_verified = 1, verification_token = NULL WHERE verification_token = ?", token)
 	if err != nil {
 		slog.Error("failed to verify user", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -430,7 +431,7 @@ func handleForgotPassword(w http.ResponseWriter, r *http.Request) {
 
 		// Check if user exists (generic success message regardless)
 		var id int64
-		err := db.QueryRow("SELECT id FROM users WHERE email = ?", emailStr).Scan(&id)
+		err := db.QueryRowContext(r.Context(), "SELECT id FROM users WHERE email = ?", emailStr).Scan(&id)
 		if err == sql.ErrNoRows {
 			// User not found - pretend we sent it
 			data := map[string]any{
@@ -459,7 +460,7 @@ func handleForgotPassword(w http.ResponseWriter, r *http.Request) {
 		expiresAt := time.Now().Add(1 * time.Hour)
 
 		// Save token
-		_, err = db.Exec("INSERT INTO password_reset_tokens (token, user_id, expires_at) VALUES (?, ?, ?)", token, id, expiresAt)
+		_, err = db.ExecContext(r.Context(), "INSERT INTO password_reset_tokens (token, user_id, expires_at) VALUES (?, ?, ?)", token, id, expiresAt)
 		if err != nil {
 			slog.Error("failed to save reset token", "error", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -475,7 +476,7 @@ func handleForgotPassword(w http.ResponseWriter, r *http.Request) {
 
 		client, err := email.GetClient()
 		if err == nil {
-			err = client.SendPasswordResetEmail(emailStr, resetURL)
+			err = client.SendPasswordResetEmail(r.Context(), emailStr, resetURL)
 		}
 		if err != nil {
 			slog.Error("failed to send password reset email", "error", err)
@@ -516,7 +517,7 @@ func handleResetPassword(w http.ResponseWriter, r *http.Request) {
 		// Validate token
 		var userID int64
 		var expiresAt time.Time
-		err := db.QueryRow("SELECT user_id, expires_at FROM password_reset_tokens WHERE token = ?", token).Scan(&userID, &expiresAt)
+		err := db.QueryRowContext(r.Context(), "SELECT user_id, expires_at FROM password_reset_tokens WHERE token = ?", token).Scan(&userID, &expiresAt)
 		if err != nil {
 			data := map[string]any{
 				"Error":     "Invalid or expired password reset link.",
@@ -565,7 +566,7 @@ func handleResetPassword(w http.ResponseWriter, r *http.Request) {
 		// Validate token again
 		var userID int64
 		var expiresAt time.Time
-		err := db.QueryRow("SELECT user_id, expires_at FROM password_reset_tokens WHERE token = ?", token).Scan(&userID, &expiresAt)
+		err := db.QueryRowContext(r.Context(), "SELECT user_id, expires_at FROM password_reset_tokens WHERE token = ?", token).Scan(&userID, &expiresAt)
 		if err != nil || time.Now().After(expiresAt) {
 			data := map[string]any{
 				"Error":     "Invalid or expired password reset link.",
@@ -586,7 +587,7 @@ func handleResetPassword(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		_, err = db.Exec("UPDATE users SET password_hash = ? WHERE id = ?", hashedPassword, userID)
+		_, err = db.ExecContext(r.Context(), "UPDATE users SET password_hash = ? WHERE id = ?", hashedPassword, userID)
 		if err != nil {
 			slog.Error("failed to update password", "error", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -594,7 +595,10 @@ func handleResetPassword(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Delete used token
-		db.Exec("DELETE FROM password_reset_tokens WHERE token = ?", token)
+		_, err = db.ExecContext(r.Context(), "DELETE FROM password_reset_tokens WHERE token = ?", token)
+		if err != nil {
+			slog.Error("failed to delete password reset token", "error", err)
+		}
 
 		data := map[string]any{
 			"IsLogin":   true,
@@ -653,14 +657,14 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch verse content from ESV API (using cache)
-	verseContents, err := fetchPassagesWithCache(dailyText.Verses)
+	verseContents, err := fetchPassagesWithCache(r.Context(), dailyText.Verses)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error loading verses for %s", today), http.StatusInternalServerError)
 		return
 	}
 
 	// Load existing SOAP data from database
-	soapData, err := getSOAPData(user.ID, today)
+	soapData, err := getSOAPData(r.Context(), user.ID, today)
 	if err != nil {
 		slog.Warn("failed to load SOAP data", "date", today, "error", err)
 		// Continue with empty values if there's an error
@@ -725,7 +729,7 @@ func handleReading(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch verse content from ESV API (using cache)
-	verseContents, err := fetchPassagesWithCache(dailyText.Verses)
+	verseContents, err := fetchPassagesWithCache(r.Context(), dailyText.Verses)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error fetching verses for %s", dateStr), http.StatusInternalServerError)
 		return
@@ -746,7 +750,7 @@ func handleReading(w http.ResponseWriter, r *http.Request) {
 }
 
 // InitDB initializes the SQLite database and applies migrations.
-func InitDB() error {
+func InitDB(ctx context.Context) error {
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath == "" {
 		dbPath = "/data/app.db"
@@ -768,14 +772,14 @@ func InitDB() error {
 	}
 
 	// Run migrations
-	if err := migrations.Run(db); err != nil {
+	if err := migrations.Run(ctx, db); err != nil {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
 	slog.Info("database initialized successfully")
 
 	// Start the cache expunger service
-	cache_expunger.Start(db)
+	cache_expunger.Start(ctx, db)
 
 	return nil
 }
@@ -809,7 +813,7 @@ func handleGetSOAP(w http.ResponseWriter, r *http.Request) {
 		dateStr = time.Now().Format(time.DateOnly)
 	}
 
-	soapData, err := getSOAPData(user.ID, dateStr)
+	soapData, err := getSOAPData(r.Context(), user.ID, dateStr)
 	if err != nil {
 		slog.Error("failed to get SOAP data", "date", dateStr, "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -835,7 +839,7 @@ func handlePostSOAP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := saveSOAPData(user.ID, &soapData); err != nil {
+	if err := saveSOAPData(r.Context(), user.ID, &soapData); err != nil {
 		slog.Error("failed to save SOAP data", "error", err)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to save data"})
@@ -847,13 +851,13 @@ func handlePostSOAP(w http.ResponseWriter, r *http.Request) {
 }
 
 // getSOAPData retrieves SOAP data from the database for a given user and date
-func getSOAPData(userID int64, dateStr string) (*SOAPData, error) {
+func getSOAPData(ctx context.Context, userID int64, dateStr string) (*SOAPData, error) {
 	var soapData SOAPData
 	var selectedVersesJSON sql.NullString
 	soapData.Date = dateStr
 
 	query := `SELECT observation, application, prayer, selected_verses FROM journal WHERE user_id = ? AND date = ?`
-	err := db.QueryRow(query, userID, dateStr).Scan(&soapData.Observation, &soapData.Application, &soapData.Prayer, &selectedVersesJSON)
+	err := db.QueryRowContext(ctx, query, userID, dateStr).Scan(&soapData.Observation, &soapData.Application, &soapData.Prayer, &selectedVersesJSON)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			// No data found, return empty values
@@ -877,7 +881,7 @@ func getSOAPData(userID int64, dateStr string) (*SOAPData, error) {
 }
 
 // saveSOAPData saves SOAP data to the database
-func saveSOAPData(userID int64, soapData *SOAPData) error {
+func saveSOAPData(ctx context.Context, userID int64, soapData *SOAPData) error {
 	// Encode selected verses as JSON
 	selectedVersesJSON, err := json.Marshal(soapData.SelectedVerses)
 	if err != nil {
@@ -894,7 +898,7 @@ func saveSOAPData(userID int64, soapData *SOAPData) error {
 			selected_verses = excluded.selected_verses,
 			timestamp = CURRENT_TIMESTAMP
 	`
-	_, err = db.Exec(query, userID, soapData.Date, soapData.Observation, soapData.Application, soapData.Prayer, selectedVersesJSON)
+	_, err = db.ExecContext(ctx, query, userID, soapData.Date, soapData.Observation, soapData.Application, soapData.Prayer, selectedVersesJSON)
 	if err != nil {
 		return fmt.Errorf("failed to save SOAP data: %w", err)
 	}
@@ -903,7 +907,7 @@ func saveSOAPData(userID int64, soapData *SOAPData) error {
 
 // User registration and authentication helpers
 
-func createUser(email, password, token, timezone string) error {
+func createUser(ctx context.Context, email, password, token, timezone string) error {
 	hashedPassword, err := auth.HashPassword(password)
 	if err != nil {
 		return err
@@ -913,16 +917,16 @@ func createUser(email, password, token, timezone string) error {
 		timezone = "UTC"
 	}
 
-	_, err = db.Exec("INSERT INTO users (email, password_hash, is_verified, verification_token, timezone) VALUES (?, ?, 0, ?, ?)", email, hashedPassword, token, timezone)
+	_, err = db.ExecContext(ctx, "INSERT INTO users (email, password_hash, is_verified, verification_token, timezone) VALUES (?, ?, 0, ?, ?)", email, hashedPassword, token, timezone)
 	return err
 }
 
-func authenticateUser(email, password string) (*User, error) {
+func authenticateUser(ctx context.Context, email, password string) (*User, error) {
 	var id int64
 	var passwordHash string
 	var isVerified bool
 	var timezone string
-	err := db.QueryRow("SELECT id, password_hash, is_verified, timezone FROM users WHERE email = ?", email).Scan(&id, &passwordHash, &isVerified, &timezone)
+	err := db.QueryRowContext(ctx, "SELECT id, password_hash, is_verified, timezone FROM users WHERE email = ?", email).Scan(&id, &passwordHash, &isVerified, &timezone)
 	if err != nil {
 		return nil, err
 	}
@@ -935,7 +939,7 @@ func authenticateUser(email, password string) (*User, error) {
 	if needsUpgrade {
 		newHash, err := auth.HashPassword(password)
 		if err == nil {
-			_, err = db.Exec("UPDATE users SET password_hash = ? WHERE id = ?", newHash, id)
+			_, err = db.ExecContext(ctx, "UPDATE users SET password_hash = ? WHERE id = ?", newHash, id)
 			if err != nil {
 				slog.Error("failed to migrate password hash", "user_id", id, "error", err)
 			}
@@ -951,7 +955,7 @@ func authenticateUser(email, password string) (*User, error) {
 	return &User{ID: id, Email: email, IsVerified: isVerified, Timezone: timezone}, nil
 }
 
-func createSession(userID int64) (string, error) {
+func createSession(ctx context.Context, userID int64) (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
@@ -960,14 +964,14 @@ func createSession(userID int64) (string, error) {
 
 	// Clean up expired sessions first (optional, but good practice)
 	// In a production app, do this in a background job
-	db.Exec("DELETE FROM sessions WHERE expires_at < ?", time.Now())
+	db.ExecContext(ctx, "DELETE FROM sessions WHERE expires_at < ?", time.Now())
 
 	expiresAt := time.Now().Add(24 * time.Hour * 30) // 30 days
-	_, err := db.Exec("INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)", token, userID, expiresAt)
+	_, err := db.ExecContext(ctx, "INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)", token, userID, expiresAt)
 	return token, err
 }
 
-func getUserFromSession(token string) (*User, error) {
+func getUserFromSession(ctx context.Context, token string) (*User, error) {
 	var user User
 	var expiresAt time.Time
 
@@ -977,7 +981,7 @@ func getUserFromSession(token string) (*User, error) {
 		JOIN users u ON s.user_id = u.id 
 		WHERE s.token = ?`
 
-	err := db.QueryRow(query, token).Scan(&user.ID, &user.Email, &user.IsVerified, &user.Timezone, &expiresAt)
+	err := db.QueryRowContext(ctx, query, token).Scan(&user.ID, &user.Email, &user.IsVerified, &user.Timezone, &expiresAt)
 	if err != nil {
 		return nil, err
 	}
@@ -990,13 +994,13 @@ func getUserFromSession(token string) (*User, error) {
 }
 
 // fetchPassagesWithCache fetches verses from the cache or the ESV API
-func fetchPassagesWithCache(references []string) (esv.EsvResponse, error) {
+func fetchPassagesWithCache(ctx context.Context, references []string) (esv.EsvResponse, error) {
 	key := strings.Join(references, ";")
 	var response esv.EsvResponse
 	var content string
 
 	// 1. Check cache
-	err := db.QueryRow("SELECT content FROM esv_cache WHERE reference = ?", key).Scan(&content)
+	err := db.QueryRowContext(ctx, "SELECT content FROM esv_cache WHERE reference = ?", key).Scan(&content)
 	if err == nil {
 		// Cache hit
 		if err := json.Unmarshal([]byte(content), &response); err != nil {
@@ -1012,7 +1016,7 @@ func fetchPassagesWithCache(references []string) (esv.EsvResponse, error) {
 	}
 
 	// 2. Fetch from API
-	response, err = esv.FetchPassages(references)
+	response, err = esv.FetchPassages(ctx, references)
 	if err != nil {
 		return response, err
 	}
@@ -1025,7 +1029,7 @@ func fetchPassagesWithCache(references []string) (esv.EsvResponse, error) {
 	}
 
 	// Use INSERT OR REPLACE to update if somehow exists (though we checked)
-	_, err = db.Exec("INSERT OR REPLACE INTO esv_cache (reference, content) VALUES (?, ?)", key, string(responseBytes))
+	_, err = db.ExecContext(ctx, "INSERT OR REPLACE INTO esv_cache (reference, content) VALUES (?, ?)", key, string(responseBytes))
 	if err != nil {
 		slog.Error("failed to save to esv_cache", "error", err)
 	} else {
