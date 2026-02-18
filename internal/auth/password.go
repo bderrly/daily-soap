@@ -1,3 +1,4 @@
+// Package auth provides password hashing and verification using Argon2id with bcrypt fallback.
 package auth
 
 import (
@@ -6,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 
 	"golang.org/x/crypto/argon2"
@@ -27,7 +29,7 @@ type params struct {
 	keyLength   uint32
 }
 
-// OWASP recommendations (m=19456 (19 MiB), t=2, p=1)
+// OWASP recommendations (m=19456 (19 MiB), t=2, p=1).
 var defaultParams = params{
 	memory:      19456,
 	iterations:  2,
@@ -40,7 +42,7 @@ var defaultParams = params{
 func HashPassword(password string) (string, error) {
 	salt := make([]byte, defaultParams.saltLength)
 	if _, err := rand.Read(salt); err != nil {
-		return "", err
+		return "", fmt.Errorf("reading random salt: %w", err)
 	}
 
 	hash := argon2.IDKey([]byte(password), salt, defaultParams.iterations, defaultParams.memory, defaultParams.parallelism, defaultParams.keyLength)
@@ -86,7 +88,7 @@ func VerifyPassword(password, encodedHash string) (match bool, needsUpgrade bool
 		if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
 			return false, false, nil
 		}
-		return false, false, err
+		return false, false, fmt.Errorf("bcrypt comparison: %w", err)
 	}
 	return true, true, nil
 }
@@ -104,7 +106,7 @@ func decodeHash(encodedHash string) (p *params, salt, hash []byte, err error) {
 	var version int
 	_, err = fmt.Sscanf(vals[2], "v=%d", &version)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("parsing version from %q: %w", vals[2], err)
 	}
 	if version != argon2.Version {
 		return nil, nil, nil, ErrIncompatibleVersion
@@ -113,20 +115,28 @@ func decodeHash(encodedHash string) (p *params, salt, hash []byte, err error) {
 	p = &params{}
 	_, err = fmt.Sscanf(vals[3], "m=%d,t=%d,p=%d", &p.memory, &p.iterations, &p.parallelism)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("parsing parameters from %q: %w", vals[3], err)
 	}
 
 	salt, err = base64.RawStdEncoding.DecodeString(vals[4])
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("decoding salt %q: %w", vals[4], err)
 	}
-	p.saltLength = uint32(len(salt))
+	saltLen := uint64(len(salt))
+	if saltLen > math.MaxUint32 {
+		return nil, nil, nil, fmt.Errorf("salt too long")
+	}
+	p.saltLength = uint32(saltLen)
 
 	hash, err = base64.RawStdEncoding.DecodeString(vals[5])
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("decoding hash %q: %w", vals[5], err)
 	}
-	p.keyLength = uint32(len(hash))
+	hashLen := uint64(len(hash))
+	if hashLen > math.MaxUint32 {
+		return nil, nil, nil, fmt.Errorf("hash too long")
+	}
+	p.keyLength = uint32(hashLen)
 
 	return p, salt, hash, nil
 }

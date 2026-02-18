@@ -1,3 +1,4 @@
+// Package server provides the core HTTP server and application logic.
 package server
 
 import (
@@ -7,6 +8,7 @@ import (
 	"embed"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -16,16 +18,16 @@ import (
 	"os"
 	"strings"
 	"time"
-	_ "time/tzdata"
+	_ "time/tzdata" // Initialize timezone data
 
 	"derrclan.com/moravian-soap/internal/auth"
-	"derrclan.com/moravian-soap/internal/cache_expunger"
 	"derrclan.com/moravian-soap/internal/dailytexts"
 	"derrclan.com/moravian-soap/internal/email"
 	"derrclan.com/moravian-soap/internal/esv"
+	"derrclan.com/moravian-soap/internal/expunger"
 	"derrclan.com/moravian-soap/internal/migrations"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/mattn/go-sqlite3" // SQLite driver
 )
 
 var (
@@ -44,6 +46,7 @@ const (
 	nonceContextKey contextKey = "nonce"
 )
 
+// User represents a system user.
 type User struct {
 	ID         int64
 	Email      string
@@ -55,14 +58,14 @@ func init() {
 	// Parse templates with function map for safe HTML rendering
 	funcMap := template.FuncMap{
 		"safeHTML": func(s string) template.HTML {
-			return template.HTML(s)
+			return template.HTML(s) // #nosec G203
 		},
 		"toJSON": func(v any) (template.JS, error) {
 			b, err := json.Marshal(v)
 			if err != nil {
-				return "", err
+				return "", fmt.Errorf("marshaling JSON: %w", err)
 			}
-			return template.JS(b), nil
+			return template.JS(b), nil // #nosec G203
 		},
 	}
 	var err error
@@ -74,6 +77,7 @@ func init() {
 	}
 }
 
+// Muxer returns the HTTP handler for the application.
 func Muxer() http.Handler {
 	mux := http.NewServeMux()
 
@@ -163,7 +167,7 @@ func generateRandomString(n int) string {
 	return base64.URLEncoding.EncodeToString(b)
 }
 
-// authMiddleware checks for a valid session cookie and sets the user in the context
+// authMiddleware checks for a valid session cookie and sets the user in the context.
 func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("session_token")
@@ -432,7 +436,7 @@ func handleForgotPassword(w http.ResponseWriter, r *http.Request) {
 		// Check if user exists (generic success message regardless)
 		var id int64
 		err := db.QueryRowContext(r.Context(), "SELECT id FROM users WHERE email = ?", emailStr).Scan(&id)
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			// User not found - pretend we sent it
 			data := map[string]any{
 				"Success":   "If an account exists for that email, a password reset link has been sent.",
@@ -705,7 +709,7 @@ func handleReading(w http.ResponseWriter, r *http.Request) {
 	dateStr := r.URL.Query().Get("date")
 	if dateStr == "" {
 		// Use user's timezone for default date
-		var loc *time.Location = time.UTC
+		loc := time.UTC
 		if user, ok := r.Context().Value(userContextKey).(*User); ok {
 			if l, err := time.LoadLocation(user.Timezone); err == nil {
 				loc = l
@@ -779,12 +783,12 @@ func InitDB(ctx context.Context) error {
 	slog.Info("database initialized successfully")
 
 	// Start the cache expunger service
-	cache_expunger.Start(ctx, db)
+	expunger.Start(ctx, db)
 
 	return nil
 }
 
-// SOAPData represents the SOAP journal entry
+// SOAPData represents the SOAP journal entry.
 type SOAPData struct {
 	Date           string   `json:"date"`
 	Observation    string   `json:"observation"`
@@ -793,7 +797,7 @@ type SOAPData struct {
 	SelectedVerses []string `json:"selectedVerses"`
 }
 
-// handleSOAP handles GET and POST requests for SOAP data
+// handleSOAP handles GET and POST requests for SOAP data.
 func handleSOAP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -805,7 +809,7 @@ func handleSOAP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleGetSOAP retrieves SOAP data for a given date
+// handleGetSOAP retrieves SOAP data for a given date.
 func handleGetSOAP(w http.ResponseWriter, r *http.Request) {
 	user := r.Context().Value(userContextKey).(*User)
 	dateStr := r.URL.Query().Get("date")
@@ -828,7 +832,7 @@ func handleGetSOAP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handlePostSOAP saves SOAP data
+// handlePostSOAP saves SOAP data.
 func handlePostSOAP(w http.ResponseWriter, r *http.Request) {
 	user := r.Context().Value(userContextKey).(*User)
 
@@ -842,15 +846,19 @@ func handlePostSOAP(w http.ResponseWriter, r *http.Request) {
 	if err := saveSOAPData(r.Context(), user.ID, &soapData); err != nil {
 		slog.Error("failed to save SOAP data", "error", err)
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to save data"})
+		if err := json.NewEncoder(w).Encode(map[string]string{"error": "Failed to save data"}); err != nil {
+			slog.Error("failed to encode error response", "error", err)
+		}
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+	if err := json.NewEncoder(w).Encode(map[string]string{"status": "success"}); err != nil {
+		slog.Error("failed to encode success response", "error", err)
+	}
 }
 
-// getSOAPData retrieves SOAP data from the database for a given user and date
+// getSOAPData retrieves SOAP data from the database for a given user and date.
 func getSOAPData(ctx context.Context, userID int64, dateStr string) (*SOAPData, error) {
 	var soapData SOAPData
 	var selectedVersesJSON sql.NullString
@@ -880,7 +888,7 @@ func getSOAPData(ctx context.Context, userID int64, dateStr string) (*SOAPData, 
 	return &soapData, nil
 }
 
-// saveSOAPData saves SOAP data to the database
+// saveSOAPData saves SOAP data to the database.
 func saveSOAPData(ctx context.Context, userID int64, soapData *SOAPData) error {
 	// Encode selected verses as JSON
 	selectedVersesJSON, err := json.Marshal(soapData.SelectedVerses)
@@ -910,7 +918,7 @@ func saveSOAPData(ctx context.Context, userID int64, soapData *SOAPData) error {
 func createUser(ctx context.Context, email, password, token, timezone string) error {
 	hashedPassword, err := auth.HashPassword(password)
 	if err != nil {
-		return err
+		return fmt.Errorf("hashing password: %w", err)
 	}
 
 	if timezone == "" {
@@ -918,7 +926,10 @@ func createUser(ctx context.Context, email, password, token, timezone string) er
 	}
 
 	_, err = db.ExecContext(ctx, "INSERT INTO users (email, password_hash, is_verified, verification_token, timezone) VALUES (?, ?, 0, ?, ?)", email, hashedPassword, token, timezone)
-	return err
+	if err != nil {
+		return fmt.Errorf("inserting user %q: %w", email, err)
+	}
+	return nil
 }
 
 func authenticateUser(ctx context.Context, email, password string) (*User, error) {
@@ -928,7 +939,7 @@ func authenticateUser(ctx context.Context, email, password string) (*User, error
 	var timezone string
 	err := db.QueryRowContext(ctx, "SELECT id, password_hash, is_verified, timezone FROM users WHERE email = ?", email).Scan(&id, &passwordHash, &isVerified, &timezone)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("authenticating user %q: %w", email, err)
 	}
 
 	match, needsUpgrade, err := auth.VerifyPassword(password, passwordHash)
@@ -958,17 +969,22 @@ func authenticateUser(ctx context.Context, email, password string) (*User, error
 func createSession(ctx context.Context, userID int64) (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
-		return "", err
+		return "", fmt.Errorf("generating session token: %w", err)
 	}
 	token := base64.URLEncoding.EncodeToString(b)
 
 	// Clean up expired sessions first (optional, but good practice)
 	// In a production app, do this in a background job
-	db.ExecContext(ctx, "DELETE FROM sessions WHERE expires_at < ?", time.Now())
+	if _, err := db.ExecContext(ctx, "DELETE FROM sessions WHERE expires_at < ?", time.Now()); err != nil {
+		slog.Error("failed to cleanup expired sessions", "error", err)
+	}
 
 	expiresAt := time.Now().Add(24 * time.Hour * 30) // 30 days
 	_, err := db.ExecContext(ctx, "INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)", token, userID, expiresAt)
-	return token, err
+	if err != nil {
+		return "", fmt.Errorf("saving session for user %d: %w", userID, err)
+	}
+	return token, nil
 }
 
 func getUserFromSession(ctx context.Context, token string) (*User, error) {
@@ -983,7 +999,7 @@ func getUserFromSession(ctx context.Context, token string) (*User, error) {
 
 	err := db.QueryRowContext(ctx, query, token).Scan(&user.ID, &user.Email, &user.IsVerified, &user.Timezone, &expiresAt)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("getting user from session: %w", err)
 	}
 
 	if time.Now().After(expiresAt) {
@@ -993,10 +1009,10 @@ func getUserFromSession(ctx context.Context, token string) (*User, error) {
 	return &user, nil
 }
 
-// fetchPassagesWithCache fetches verses from the cache or the ESV API
-func fetchPassagesWithCache(ctx context.Context, references []string) (esv.EsvResponse, error) {
+// fetchPassagesWithCache fetches verses from the cache or the ESV API.
+func fetchPassagesWithCache(ctx context.Context, references []string) (esv.Response, error) {
 	key := strings.Join(references, ";")
-	var response esv.EsvResponse
+	var response esv.Response
 	var content string
 
 	// 1. Check cache
@@ -1010,7 +1026,7 @@ func fetchPassagesWithCache(ctx context.Context, references []string) (esv.EsvRe
 			slog.Debug("cache hit for verses", "reference", key)
 			return response, nil
 		}
-	} else if err != sql.ErrNoRows {
+	} else if !errors.Is(err, sql.ErrNoRows) {
 		// Log DB error but proceed to fetch
 		slog.Error("failed to query esv_cache", "error", err)
 	}
@@ -1018,7 +1034,7 @@ func fetchPassagesWithCache(ctx context.Context, references []string) (esv.EsvRe
 	// 2. Fetch from API
 	response, err = esv.FetchPassages(ctx, references)
 	if err != nil {
-		return response, err
+		return response, fmt.Errorf("fetching passages %v from ESV: %w", references, err)
 	}
 
 	// 3. Save to cache

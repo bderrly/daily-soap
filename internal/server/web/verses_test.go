@@ -10,7 +10,7 @@ import (
 type PassageMeta struct { // minimalistic mock
 }
 
-type EsvResponse struct {
+type Response struct {
 	Passages  []string
 	Copyright string
 	// other fields ignored for this test
@@ -19,7 +19,7 @@ type EsvResponse struct {
 func TestVersesTemplate(t *testing.T) {
 	// Mock data
 	data := map[string]any{
-		"esvData": EsvResponse{
+		"esvData": Response{
 			Passages:  []string{"<p>Verse 1</p>", "<p>Verse 2</p>"},
 			Copyright: "ESV Copyright",
 		},
@@ -28,7 +28,7 @@ func TestVersesTemplate(t *testing.T) {
 	// Parse template
 	funcMap := template.FuncMap{
 		"safeHTML": func(s string) template.HTML {
-			return template.HTML(s)
+			return template.HTML(s) // #nosec G203
 		},
 	}
 

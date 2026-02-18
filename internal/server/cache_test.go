@@ -34,7 +34,7 @@ func TestFetchPassagesWithCache_Hit(t *testing.T) {
 
 	// 3. Insert fake cache entry
 	fakeRef := "Test 1:1"
-	fakeResponse := esv.EsvResponse{
+	fakeResponse := esv.Response{
 		Query:    fakeRef,
 		Passages: []string{"<p>This is a cached response</p>"},
 	}

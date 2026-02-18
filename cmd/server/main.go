@@ -1,7 +1,10 @@
+// Package main is the entry point for the daily-soap server.
 package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -15,19 +18,25 @@ import (
 )
 
 func main() {
+	opts := &slog.HandlerOptions{Level: slog.LevelInfo}
+	handler := slog.NewTextHandler(os.Stderr, opts)
+	slog.SetDefault(slog.New(handler))
+
+	if err := run(); err != nil {
+		slog.Error("application failed", "error", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	_ = godotenv.Load()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	if err := server.InitDB(ctx); err != nil {
-		slog.Error("failed to initialize database", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("initializing database: %w", err)
 	}
-
-	opts := &slog.HandlerOptions{Level: slog.LevelDebug}
-	handler := slog.NewTextHandler(os.Stderr, opts)
-	slog.SetDefault(slog.New(handler))
 
 	mux := server.Muxer()
 
@@ -37,8 +46,9 @@ func main() {
 	}
 
 	srv := http.Server{
-		Addr:    ":" + port,
-		Handler: mux,
+		Addr:              ":" + port,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 
 	idleConns := make(chan struct{})
@@ -48,21 +58,21 @@ func main() {
 		<-sigint
 
 		slog.Info("shutting down server...")
-		cancel() // Signal background tasks to stop
+		cancel()
 
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer shutdownCancel()
 
 		if err := srv.Shutdown(shutdownCtx); err != nil {
-			slog.Error("error shutting down http server", "error", err)
+			slog.Error("shutting down http server", "error", err)
 		}
 		close(idleConns)
 	}()
 
 	slog.Info("starting server", "addr", srv.Addr)
-	if err := srv.ListenAndServe(); err != nil {
-		slog.Error("http server died", "error", err)
-		os.Exit(1)
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return fmt.Errorf("listen and serve: %w", err)
 	}
 	<-idleConns
+	return nil
 }

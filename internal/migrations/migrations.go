@@ -1,3 +1,4 @@
+// Package migrations handles database schema migrations using goose.
 package migrations
 
 import (

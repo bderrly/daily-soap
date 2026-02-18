@@ -1,3 +1,4 @@
+// Package dailytexts provides access to the Daily Texts (Losungen) for various years.
 package dailytexts
 
 import (
@@ -13,13 +14,15 @@ import (
 var texts embed.FS
 
 var (
-	// Cache of loaded year data, keyed by year (e.g., "2025", "2026")
+	// Cache of loaded year data, keyed by year (e.g., "2025", "2026").
 	yearDataCache = make(map[string]Year)
 	cacheMutex    sync.RWMutex
 )
 
+// Year represents a map of dates to daily texts for a specific year.
 type Year map[string]DailyText
 
+// DailyText represents the content of a daily text entry.
 type DailyText struct {
 	Verses          []string `json:"verses"`
 	Prayer          string   `json:"prayer"`
@@ -29,7 +32,7 @@ type DailyText struct {
 	SpecialRemarks  []string `json:"special_remarks,omitempty"`
 }
 
-// getDailyText retrieves the daily text for a given date (YYYY-MM-DD format).
+// GetDailyText retrieves the daily text for a given date (YYYY-MM-DD format).
 // It will automatically load the year file if it hasn't been loaded yet.
 func GetDailyText(dateStr string) (*DailyText, error) {
 	// Extract year from date string (first 4 characters)

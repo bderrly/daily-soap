@@ -1,8 +1,10 @@
-package cache_expunger
+// Package expunger provides a background service to remove expired entries from the ESV cache.
+package expunger
 
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"time"
 )
@@ -45,14 +47,14 @@ func Expunge(ctx context.Context, db *sql.DB) error {
 	// The table defaults created_at to CURRENT_TIMESTAMP which is UTC.
 	_, err := db.ExecContext(ctx, "DELETE FROM esv_cache WHERE created_at < datetime('now', '-28 days')")
 	if err != nil {
-		return err
+		return fmt.Errorf("purging old cache entries: %w", err)
 	}
 
 	// 2. Count-based purge: ensure not more than 500 entries
 	var count int
 	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM esv_cache").Scan(&count)
 	if err != nil {
-		return err
+		return fmt.Errorf("counting cache entries: %w", err)
 	}
 
 	if count > 500 {
@@ -70,7 +72,7 @@ func Expunge(ctx context.Context, db *sql.DB) error {
 		`
 		_, err = db.ExecContext(ctx, query, limit)
 		if err != nil {
-			return err
+			return fmt.Errorf("expunging %d excess cache entries: %w", limit, err)
 		}
 		slog.Info("expunged excess cache entries", "removed_count", limit)
 	}

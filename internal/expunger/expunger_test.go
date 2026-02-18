@@ -1,4 +1,4 @@
-package cache_expunger
+package expunger
 
 import (
 	"context"

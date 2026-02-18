@@ -1,0 +1,29 @@
+version: "2"
+linters:
+  enable:
+    - bodyclose
+    - contextcheck
+    - copyloopvar
+    - errcheck
+    - errorlint
+    - funcorder
+    - gocritic
+    - godot
+    - gosec
+    - makezero
+    - misspell
+    - nilerr
+    - nolintlint
+    - predeclared
+    - revive
+    - rowserrcheck
+    - sloglint
+    - sqlclosecheck
+    - unconvert
+    - unparam
+    - whitespace
+    - wrapcheck
+  settings:
+    errcheck:
+      exclude-functions:
+        - (*database/sql.DB).Close

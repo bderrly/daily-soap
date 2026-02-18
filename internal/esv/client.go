@@ -1,3 +1,4 @@
+// Package esv provides a client for the ESV API.
 package esv
 
 import (
@@ -23,8 +24,8 @@ type PassageMeta struct {
 	NextChapter  []int  `json:"next_chapter"`
 }
 
-// EsvResponse represents the response structure from the ESV API.
-type EsvResponse struct {
+// Response represents the response structure from the ESV API.
+type Response struct {
 	Query       string        `json:"query"`
 	PassageMeta []PassageMeta `json:"passage_meta"`
 	Passages    []string      `json:"passages"`
@@ -32,7 +33,7 @@ type EsvResponse struct {
 }
 
 // FetchPassages fetches verses from the ESV API.
-func FetchPassages(ctx context.Context, references []string) (EsvResponse, error) {
+func FetchPassages(ctx context.Context, references []string) (Response, error) {
 	// See https://api.esv.org/docs/passage-html/ for API documentation.
 	apiURL := "https://api.esv.org/v3/passage/html/"
 	params := url.Values{}
@@ -42,7 +43,7 @@ func FetchPassages(ctx context.Context, references []string) (EsvResponse, error
 	params.Add("include-first-verse-numbers", "false")
 	apiURL += "?" + params.Encode()
 
-	var apiResp EsvResponse
+	var apiResp Response
 
 	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
 	if err != nil {
@@ -59,7 +60,11 @@ func FetchPassages(ctx context.Context, references []string) (EsvResponse, error
 	if err != nil {
 		return apiResp, fmt.Errorf("failed to fetch verse: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil {
+			slog.Error("failed to close response body", "error", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return apiResp, fmt.Errorf("ESV API returned status %d", resp.StatusCode)

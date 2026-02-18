@@ -1,3 +1,4 @@
+// Package email provides email sending capabilities using Mailgun.
 package email
 
 import (
@@ -47,38 +48,6 @@ func GetClient() (*Client, error) {
 	return defaultClient, clientErr
 }
 
-// send handles the actual email sending with exponential backoff retry logic.
-func (c *Client) send(ctx context.Context, recipient, subject, htmlBody string) error {
-	message := mailgun.NewMessage(c.domain, c.sender, subject, "")
-	message.AddRecipient(recipient)
-	message.SetHTML(htmlBody)
-
-	var lastErr error
-	maxRetries := 5
-	backoff := time.Second
-
-	for i := range maxRetries {
-		sendCtx, cancel := context.WithTimeout(ctx, time.Second*10)
-		_, lastErr = c.mg.Send(sendCtx, message)
-		cancel()
-
-		if lastErr == nil {
-			return nil
-		}
-
-		if i < maxRetries-1 {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(backoff):
-				backoff *= 2
-			}
-		}
-	}
-
-	return fmt.Errorf("failed to send email after %d attempts: %w", maxRetries, lastErr)
-}
-
 // SendWelcomeEmail sends a welcome email using the client instance.
 func (c *Client) SendWelcomeEmail(ctx context.Context, recipientEmail, confirmationURL string) error {
 	subject := "Welcome to your Daily SOAP Journal - Please Confirm Your Email"
@@ -118,4 +87,38 @@ func (c *Client) SendPasswordResetEmail(ctx context.Context, recipientEmail, res
 `, resetURL, resetURL)
 
 	return c.send(ctx, recipientEmail, subject, body)
+}
+
+// send handles the actual email sending with exponential backoff retry logic.
+func (c *Client) send(ctx context.Context, recipient, subject, htmlBody string) error {
+	message := mailgun.NewMessage(c.domain, c.sender, subject, "")
+	if err := message.AddRecipient(recipient); err != nil {
+		return fmt.Errorf("adding recipient %q: %w", recipient, err)
+	}
+	message.SetHTML(htmlBody)
+
+	var lastErr error
+	maxRetries := 5
+	backoff := time.Second
+
+	for i := range maxRetries {
+		sendCtx, cancel := context.WithTimeout(ctx, time.Second*10)
+		_, lastErr = c.mg.Send(sendCtx, message)
+		cancel()
+
+		if lastErr == nil {
+			return nil
+		}
+
+		if i < maxRetries-1 {
+			select {
+			case <-ctx.Done():
+				return fmt.Errorf("waiting for retry backoff: %w", ctx.Err())
+			case <-time.After(backoff):
+				backoff *= 2
+			}
+		}
+	}
+
+	return fmt.Errorf("failed to send email after %d attempts: %w", maxRetries, lastErr)
 }

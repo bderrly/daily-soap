@@ -1,3 +1,4 @@
+// Package esv provides a client for the ESV API and utilities to process its HTML responses.
 package esv
 
 import (
@@ -273,7 +274,6 @@ func processNode(n *html.Node, activeVerseRef string) string {
 
 				newChildren = append(newChildren, c)
 			}
-
 		} else if c.Type == html.TextNode {
 			if shouldTrimLeading {
 				c.Data = strings.TrimLeft(c.Data, cutset)
@@ -281,8 +281,6 @@ func processNode(n *html.Node, activeVerseRef string) string {
 					shouldTrimLeading = false
 				}
 			}
-
-			cleanTextNode(c)
 
 			if strings.TrimSpace(c.Data) == "" {
 				// Pure whitespace
@@ -341,16 +339,16 @@ func createVerseWrapper(ref string) *html.Node {
 func cleanupAttributes(n *html.Node) {
 	switch n.DataAtom {
 	case atom.P:
-		removeAttr(n, "id")
+		removeID(n)
 		removeClass(n, "virtual")
 	case atom.Span:
 		if hasClass(n, "line") {
-			removeAttr(n, "id")
+			removeID(n)
 		}
 	case atom.B:
-		removeAttr(n, "id")
+		removeID(n)
 	case atom.H1, atom.H2, atom.H3, atom.H4, atom.H5, atom.H6:
-		removeAttr(n, "id")
+		removeID(n)
 	}
 }
 
@@ -377,10 +375,6 @@ func cleanVerseMarker(n *html.Node) {
 	if n.Type == html.ElementNode && n.DataAtom == atom.B && hasClass(n, "verse-num") {
 		trimChildrenWhitespace(n)
 	}
-}
-
-func cleanTextNode(n *html.Node) {
-
 }
 
 func trimChildrenWhitespace(n *html.Node) {
@@ -472,10 +466,10 @@ func setAttr(n *html.Node, key, val string) {
 	n.Attr = append(n.Attr, html.Attribute{Key: key, Val: val})
 }
 
-// removeAttr removes an attribute from a node.
-func removeAttr(n *html.Node, key string) {
+// removeID removes the 'id' attribute from a node.
+func removeID(n *html.Node) {
 	for i, a := range n.Attr {
-		if a.Key == key {
+		if a.Key == "id" {
 			n.Attr = append(n.Attr[:i], n.Attr[i+1:]...)
 			return
 		}
