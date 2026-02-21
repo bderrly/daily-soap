@@ -62,11 +62,11 @@ func Expunge(ctx context.Context, db *sql.DB) error {
 		// Delete the 'limit' oldest records
 		// We identify them by selecting the oldest ones first (ORDER BY created_at ASC)
 		query := `
-			DELETE FROM esv_cache 
+			DELETE FROM esv_cache
 			WHERE reference IN (
-				SELECT reference 
-				FROM esv_cache 
-				ORDER BY created_at ASC 
+				SELECT reference
+				FROM esv_cache
+				ORDER BY created_at ASC
 				LIMIT ?
 			)
 		`

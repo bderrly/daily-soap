@@ -38,7 +38,7 @@ def backup_database():
             with closing(sqlite3.connect(db_path)) as src, \
                  closing(sqlite3.connect(temp_backup.name)) as dst:
                 src.backup(dst)
-            
+
             logger.info(f"Local backup created at {temp_backup.name}")
 
             logger.info(f"Uploading to gs://{bucket_name}/{full_blob_path}...")

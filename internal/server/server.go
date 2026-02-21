@@ -992,9 +992,9 @@ func getUserFromSession(ctx context.Context, token string) (*User, error) {
 	var expiresAt time.Time
 
 	query := `
-		SELECT u.id, u.email, u.is_verified, u.timezone, s.expires_at 
-		FROM sessions s 
-		JOIN users u ON s.user_id = u.id 
+		SELECT u.id, u.email, u.is_verified, u.timezone, s.expires_at
+		FROM sessions s
+		JOIN users u ON s.user_id = u.id
 		WHERE s.token = ?`
 
 	err := db.QueryRowContext(ctx, query, token).Scan(&user.ID, &user.Email, &user.IsVerified, &user.Timezone, &expiresAt)
