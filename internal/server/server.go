@@ -26,13 +26,16 @@ import (
 	"derrclan.com/moravian-soap/internal/esv"
 	"derrclan.com/moravian-soap/internal/expunger"
 	"derrclan.com/moravian-soap/internal/migrations"
+	"derrclan.com/moravian-soap/internal/store"
+	"derrclan.com/moravian-soap/internal/store/sqlite"
 
 	_ "github.com/mattn/go-sqlite3" // SQLite driver
 )
 
 var (
-	tmpl *template.Template
-	db   *sql.DB
+	tmpl     *template.Template
+	db       *sql.DB
+	appStore store.Store
 )
 
 //go:embed web
@@ -45,14 +48,6 @@ const (
 	csrfContextKey  contextKey = "csrf_token"
 	nonceContextKey contextKey = "nonce"
 )
-
-// User represents a system user.
-type User struct {
-	ID         int64
-	Email      string
-	IsVerified bool
-	Timezone   string
-}
 
 func init() {
 	// Parse templates with function map for safe HTML rendering
@@ -180,7 +175,7 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		user, err := getUserFromSession(r.Context(), cookie.Value)
+		user, err := appStore.GetUserFromSession(r.Context(), cookie.Value)
 		if err != nil {
 			// Invalid session
 			http.SetCookie(w, &http.Cookie{
@@ -243,7 +238,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 		// Update timezone if provided
 		if timezone != "" {
-			if _, err := db.ExecContext(r.Context(), "UPDATE users SET timezone = ? WHERE id = ?", timezone, user.ID); err != nil {
+			if err := appStore.UpdateUserTimezone(r.Context(), user.ID, timezone); err != nil {
 				slog.Error("failed to update user timezone", "error", err, "user_id", user.ID)
 			}
 		}
@@ -377,14 +372,13 @@ func handleConfirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := db.ExecContext(r.Context(), "UPDATE users SET is_verified = 1, verification_token = NULL WHERE verification_token = ?", token)
+	rowsAffected, err := appStore.ConfirmUser(r.Context(), token)
 	if err != nil {
 		slog.Error("failed to verify user", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
-	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
 		data := map[string]any{
 			"IsLogin":   true,
@@ -434,8 +428,7 @@ func handleForgotPassword(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Check if user exists (generic success message regardless)
-		var id int64
-		err := db.QueryRowContext(r.Context(), "SELECT id FROM users WHERE email = ?", emailStr).Scan(&id)
+		user, err := appStore.GetUserByEmail(r.Context(), emailStr)
 		if errors.Is(err, sql.ErrNoRows) {
 			// User not found - pretend we sent it
 			data := map[string]any{
@@ -464,7 +457,7 @@ func handleForgotPassword(w http.ResponseWriter, r *http.Request) {
 		expiresAt := time.Now().Add(1 * time.Hour)
 
 		// Save token
-		_, err = db.ExecContext(r.Context(), "INSERT INTO password_reset_tokens (token, user_id, expires_at) VALUES (?, ?, ?)", token, id, expiresAt)
+		err = appStore.CreatePasswordResetToken(r.Context(), token, user.ID, expiresAt)
 		if err != nil {
 			slog.Error("failed to save reset token", "error", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -519,9 +512,7 @@ func handleResetPassword(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Validate token
-		var userID int64
-		var expiresAt time.Time
-		err := db.QueryRowContext(r.Context(), "SELECT user_id, expires_at FROM password_reset_tokens WHERE token = ?", token).Scan(&userID, &expiresAt)
+		_, expiresAt, err := appStore.GetPasswordResetToken(r.Context(), token)
 		if err != nil {
 			data := map[string]any{
 				"Error":     "Invalid or expired password reset link.",
@@ -568,9 +559,7 @@ func handleResetPassword(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Validate token again
-		var userID int64
-		var expiresAt time.Time
-		err := db.QueryRowContext(r.Context(), "SELECT user_id, expires_at FROM password_reset_tokens WHERE token = ?", token).Scan(&userID, &expiresAt)
+		userID, expiresAt, err := appStore.GetPasswordResetToken(r.Context(), token)
 		if err != nil || time.Now().After(expiresAt) {
 			data := map[string]any{
 				"Error":     "Invalid or expired password reset link.",
@@ -591,7 +580,7 @@ func handleResetPassword(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		_, err = db.ExecContext(r.Context(), "UPDATE users SET password_hash = ? WHERE id = ?", hashedPassword, userID)
+		err = appStore.UpdateUserPassword(r.Context(), userID, hashedPassword)
 		if err != nil {
 			slog.Error("failed to update password", "error", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -599,7 +588,7 @@ func handleResetPassword(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Delete used token
-		_, err = db.ExecContext(r.Context(), "DELETE FROM password_reset_tokens WHERE token = ?", token)
+		err = appStore.DeletePasswordResetToken(r.Context(), token)
 		if err != nil {
 			slog.Error("failed to delete password reset token", "error", err)
 		}
@@ -630,7 +619,7 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleIndex(w http.ResponseWriter, r *http.Request) {
-	user := r.Context().Value(userContextKey).(*User)
+	user := r.Context().Value(userContextKey).(*store.User)
 
 	// Only handle root path
 	if r.URL.Path != "/" {
@@ -668,11 +657,11 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Load existing SOAP data from database
-	soapData, err := getSOAPData(r.Context(), user.ID, today)
+	soapData, err := appStore.GetSOAPData(r.Context(), user.ID, today)
 	if err != nil {
 		slog.Warn("failed to load SOAP data", "date", today, "error", err)
 		// Continue with empty values if there's an error
-		soapData = &SOAPData{
+		soapData = &store.SOAPData{
 			Date:           today,
 			Observation:    "",
 			Application:    "",
@@ -710,7 +699,7 @@ func handleReading(w http.ResponseWriter, r *http.Request) {
 	if dateStr == "" {
 		// Use user's timezone for default date
 		loc := time.UTC
-		if user, ok := r.Context().Value(userContextKey).(*User); ok {
+		if user, ok := r.Context().Value(userContextKey).(*store.User); ok {
 			if l, err := time.LoadLocation(user.Timezone); err == nil {
 				loc = l
 			}
@@ -782,19 +771,13 @@ func InitDB(ctx context.Context) error {
 
 	slog.Info("database initialized successfully")
 
+	// Initialize the store
+	appStore = sqlite.New(db)
+
 	// Start the cache expunger service
-	expunger.Start(ctx, db)
+	expunger.Start(ctx, appStore)
 
 	return nil
-}
-
-// SOAPData represents the SOAP journal entry.
-type SOAPData struct {
-	Date           string   `json:"date"`
-	Observation    string   `json:"observation"`
-	Application    string   `json:"application"`
-	Prayer         string   `json:"prayer"`
-	SelectedVerses []string `json:"selectedVerses"`
 }
 
 // handleSOAP handles GET and POST requests for SOAP data.
@@ -811,13 +794,13 @@ func handleSOAP(w http.ResponseWriter, r *http.Request) {
 
 // handleGetSOAP retrieves SOAP data for a given date.
 func handleGetSOAP(w http.ResponseWriter, r *http.Request) {
-	user := r.Context().Value(userContextKey).(*User)
+	user := r.Context().Value(userContextKey).(*store.User)
 	dateStr := r.URL.Query().Get("date")
 	if dateStr == "" {
 		dateStr = time.Now().Format(time.DateOnly)
 	}
 
-	soapData, err := getSOAPData(r.Context(), user.ID, dateStr)
+	soapData, err := appStore.GetSOAPData(r.Context(), user.ID, dateStr)
 	if err != nil {
 		slog.Error("failed to get SOAP data", "date", dateStr, "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -834,16 +817,16 @@ func handleGetSOAP(w http.ResponseWriter, r *http.Request) {
 
 // handlePostSOAP saves SOAP data.
 func handlePostSOAP(w http.ResponseWriter, r *http.Request) {
-	user := r.Context().Value(userContextKey).(*User)
+	user := r.Context().Value(userContextKey).(*store.User)
 
-	var soapData SOAPData
+	var soapData store.SOAPData
 	if err := json.NewDecoder(r.Body).Decode(&soapData); err != nil {
 		slog.Error("failed to decode SOAP data", "error", err)
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
 
-	if err := saveSOAPData(r.Context(), user.ID, &soapData); err != nil {
+	if err := appStore.SaveSOAPData(r.Context(), user.ID, &soapData); err != nil {
 		slog.Error("failed to save SOAP data", "error", err)
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(map[string]string{"error": "Failed to save data"}); err != nil {
@@ -858,61 +841,6 @@ func handlePostSOAP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// getSOAPData retrieves SOAP data from the database for a given user and date.
-func getSOAPData(ctx context.Context, userID int64, dateStr string) (*SOAPData, error) {
-	var soapData SOAPData
-	var selectedVersesJSON sql.NullString
-	soapData.Date = dateStr
-
-	query := `SELECT observation, application, prayer, selected_verses FROM journal WHERE user_id = ? AND date = ?`
-	err := db.QueryRowContext(ctx, query, userID, dateStr).Scan(&soapData.Observation, &soapData.Application, &soapData.Prayer, &selectedVersesJSON)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			// No data found, return empty values
-			soapData.SelectedVerses = []string{}
-			return &soapData, nil
-		}
-		return nil, fmt.Errorf("failed to query SOAP data: %w", err)
-	}
-
-	// Parse selected verses from JSON
-	if selectedVersesJSON.Valid && selectedVersesJSON.String != "" {
-		if err := json.Unmarshal([]byte(selectedVersesJSON.String), &soapData.SelectedVerses); err != nil {
-			slog.Warn("failed to unmarshal selected verses", "error", err)
-			soapData.SelectedVerses = []string{}
-		}
-	} else {
-		soapData.SelectedVerses = []string{}
-	}
-
-	return &soapData, nil
-}
-
-// saveSOAPData saves SOAP data to the database.
-func saveSOAPData(ctx context.Context, userID int64, soapData *SOAPData) error {
-	// Encode selected verses as JSON
-	selectedVersesJSON, err := json.Marshal(soapData.SelectedVerses)
-	if err != nil {
-		return fmt.Errorf("failed to marshal selected verses: %w", err)
-	}
-
-	query := `
-		INSERT INTO journal (user_id, date, observation, application, prayer, selected_verses)
-		VALUES (?, ?, ?, ?, ?, ?)
-		ON CONFLICT(user_id, date) DO UPDATE SET
-			observation = excluded.observation,
-			application = excluded.application,
-			prayer = excluded.prayer,
-			selected_verses = excluded.selected_verses,
-			timestamp = CURRENT_TIMESTAMP
-	`
-	_, err = db.ExecContext(ctx, query, userID, soapData.Date, soapData.Observation, soapData.Application, soapData.Prayer, selectedVersesJSON)
-	if err != nil {
-		return fmt.Errorf("failed to save SOAP data: %w", err)
-	}
-	return nil
-}
-
 // User registration and authentication helpers
 
 func createUser(ctx context.Context, email, password, token, timezone string) error {
@@ -921,23 +849,14 @@ func createUser(ctx context.Context, email, password, token, timezone string) er
 		return fmt.Errorf("hashing password: %w", err)
 	}
 
-	if timezone == "" {
-		timezone = "UTC"
-	}
-
-	_, err = db.ExecContext(ctx, "INSERT INTO users (email, password_hash, is_verified, verification_token, timezone) VALUES (?, ?, 0, ?, ?)", email, hashedPassword, token, timezone)
-	if err != nil {
-		return fmt.Errorf("inserting user %q: %w", email, err)
+	if err := appStore.CreateUser(ctx, email, hashedPassword, token, timezone); err != nil {
+		return fmt.Errorf("creating user in store: %w", err)
 	}
 	return nil
 }
 
-func authenticateUser(ctx context.Context, email, password string) (*User, error) {
-	var id int64
-	var passwordHash string
-	var isVerified bool
-	var timezone string
-	err := db.QueryRowContext(ctx, "SELECT id, password_hash, is_verified, timezone FROM users WHERE email = ?", email).Scan(&id, &passwordHash, &isVerified, &timezone)
+func authenticateUser(ctx context.Context, email, password string) (*store.User, error) {
+	id, passwordHash, isVerified, timezone, err := appStore.GetAuthUser(ctx, email)
 	if err != nil {
 		return nil, fmt.Errorf("authenticating user %q: %w", email, err)
 	}
@@ -950,7 +869,7 @@ func authenticateUser(ctx context.Context, email, password string) (*User, error
 	if needsUpgrade {
 		newHash, err := auth.HashPassword(password)
 		if err == nil {
-			_, err = db.ExecContext(ctx, "UPDATE users SET password_hash = ? WHERE id = ?", newHash, id)
+			err = appStore.UpdateUserPasswordHash(ctx, id, newHash)
 			if err != nil {
 				slog.Error("failed to migrate password hash", "user_id", id, "error", err)
 			}
@@ -963,7 +882,7 @@ func authenticateUser(ctx context.Context, email, password string) (*User, error
 		return nil, fmt.Errorf("email not verified")
 	}
 
-	return &User{ID: id, Email: email, IsVerified: isVerified, Timezone: timezone}, nil
+	return &store.User{ID: id, Email: email, IsVerified: isVerified, Timezone: timezone}, nil
 }
 
 func createSession(ctx context.Context, userID int64) (string, error) {
@@ -973,50 +892,26 @@ func createSession(ctx context.Context, userID int64) (string, error) {
 	}
 	token := base64.URLEncoding.EncodeToString(b)
 
-	// Clean up expired sessions first (optional, but good practice)
-	// In a production app, do this in a background job
-	if _, err := db.ExecContext(ctx, "DELETE FROM sessions WHERE expires_at < ?", time.Now()); err != nil {
+	// Clean up expired sessions first.
+	if err := appStore.DeleteExpiredSessions(ctx); err != nil {
 		slog.Error("failed to cleanup expired sessions", "error", err)
 	}
 
 	expiresAt := time.Now().Add(24 * time.Hour * 30) // 30 days
-	_, err := db.ExecContext(ctx, "INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)", token, userID, expiresAt)
+	err := appStore.CreateSession(ctx, token, userID, expiresAt)
 	if err != nil {
 		return "", fmt.Errorf("saving session for user %d: %w", userID, err)
 	}
 	return token, nil
 }
 
-func getUserFromSession(ctx context.Context, token string) (*User, error) {
-	var user User
-	var expiresAt time.Time
-
-	query := `
-		SELECT u.id, u.email, u.is_verified, u.timezone, s.expires_at
-		FROM sessions s
-		JOIN users u ON s.user_id = u.id
-		WHERE s.token = ?`
-
-	err := db.QueryRowContext(ctx, query, token).Scan(&user.ID, &user.Email, &user.IsVerified, &user.Timezone, &expiresAt)
-	if err != nil {
-		return nil, fmt.Errorf("getting user from session: %w", err)
-	}
-
-	if time.Now().After(expiresAt) {
-		return nil, fmt.Errorf("session expired")
-	}
-
-	return &user, nil
-}
-
 // fetchPassagesWithCache fetches verses from the cache or the ESV API.
 func fetchPassagesWithCache(ctx context.Context, references []string) (esv.Response, error) {
 	key := strings.Join(references, ";")
 	var response esv.Response
-	var content string
 
 	// 1. Check cache
-	err := db.QueryRowContext(ctx, "SELECT content FROM esv_cache WHERE reference = ?", key).Scan(&content)
+	content, err := appStore.GetCachedESV(ctx, key)
 	if err == nil {
 		// Cache hit
 		if err := json.Unmarshal([]byte(content), &response); err != nil {
@@ -1044,8 +939,7 @@ func fetchPassagesWithCache(ctx context.Context, references []string) (esv.Respo
 		return response, nil // Return successful fetch even if cache save fails
 	}
 
-	// Use INSERT OR REPLACE to update if somehow exists (though we checked)
-	_, err = db.ExecContext(ctx, "INSERT OR REPLACE INTO esv_cache (reference, content) VALUES (?, ?)", key, string(responseBytes))
+	err = appStore.SaveCachedESV(ctx, key, string(responseBytes))
 	if err != nil {
 		slog.Error("failed to save to esv_cache", "error", err)
 	} else {

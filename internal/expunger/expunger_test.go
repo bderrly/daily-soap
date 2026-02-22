@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"testing"
 
+	"derrclan.com/moravian-soap/internal/store/sqlite"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -31,6 +32,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 func TestExpunge_TimeLimit(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
+	s := sqlite.New(db)
 
 	ctx := context.TODO()
 
@@ -47,7 +49,7 @@ func TestExpunge_TimeLimit(t *testing.T) {
 	}
 
 	// Run Expunge
-	if err := Expunge(ctx, db); err != nil {
+	if err := Expunge(ctx, s); err != nil {
 		t.Fatalf("Expunge failed: %v", err)
 	}
 
@@ -74,6 +76,7 @@ func TestExpunge_TimeLimit(t *testing.T) {
 func TestExpunge_CountLimit(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
+	s := sqlite.New(db)
 
 	ctx := context.TODO()
 
@@ -96,7 +99,7 @@ func TestExpunge_CountLimit(t *testing.T) {
 	}
 
 	// Run Expunge
-	if err := Expunge(ctx, db); err != nil {
+	if err := Expunge(ctx, s); err != nil {
 		t.Fatalf("Expunge failed: %v", err)
 	}
 

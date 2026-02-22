@@ -10,6 +10,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 
 	"derrclan.com/moravian-soap/internal/esv"
+	"derrclan.com/moravian-soap/internal/store/sqlite"
 )
 
 func TestFetchPassagesWithCache_Hit(t *testing.T) {
@@ -20,6 +21,7 @@ func TestFetchPassagesWithCache_Hit(t *testing.T) {
 		t.Fatalf("failed to open test db: %v", err)
 	}
 	defer db.Close()
+	appStore = sqlite.New(db)
 
 	// 2. Create table
 	createCacheSQL := `
