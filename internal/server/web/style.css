@@ -36,11 +36,22 @@ body {
     height: 48px;
 }
 
+.logo-large {
+    width: 64px;
+    height: 64px;
+}
+
 h1 {
     color: #4A6FA5;
     margin-bottom: 1rem;
     font-size: 1.8rem;
     font-weight: 600;
+}
+
+.header-brand {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
 }
 
 .header-title {
