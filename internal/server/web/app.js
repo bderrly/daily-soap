@@ -41,7 +41,6 @@
         61: '2 Peter', 62: '1 John', 63: '2 John', 64: '3 John', 65: 'Jude', 66: 'Revelation'
     };
 
-    // Parse verse ID (format: v23063008-1 where 23=book, 063=chapter, 008=verse)
     // Parse verse ID (format: 23063008)
     function parseVerseId(verseId) {
         // Strict format: 8 digits
@@ -245,6 +244,11 @@
     }
 
     function handleVerseClick(e) {
+        // Only handle clicks within a verse inside the verses section
+        if (!e.target.closest('.verses-section .verse-content')) {
+            return;
+        }
+
         // Prevent selection when clicking headers or extra_text
         if (e.target.closest('h1, h2, h3, h4, h5, h6, .extra_text')) {
             return;
@@ -258,10 +262,8 @@
     }
 
     function init() {
-        const versesSection = document.querySelector('.verses-section');
-        if (versesSection) {
-            versesSection.addEventListener('click', handleVerseClick);
-        }
+        // Delegate verse clicks to body to handle HTMX swaps
+        document.body.addEventListener('click', handleVerseClick);
         refreshHighlights();
     }
 
