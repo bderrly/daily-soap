@@ -1,4 +1,41 @@
 :root {
+    /* Colors */
+    --primary-color: #4A6FA5;
+    --primary-hover: #3b5a84;
+    --secondary-color: #6B8FA3;
+    --text-primary: #2C3E50;
+    --text-secondary: #666;
+    --text-muted: #7f8c8d;
+    --verse-text: #5A6C7D;
+
+    /* Backgrounds */
+    --bg-gradient-start: #6B8FA3;
+    --bg-gradient-end: #7A9BB3;
+    --bg-light: #F5F7FA;
+    --bg-highlight: #E8F4F8;
+    --bg-selected: #FFF9C4;
+    --bg-selected-num: #FFD54F;
+    --bg-container: rgba(255, 255, 255, 0.95);
+
+    /* Borders */
+    --border-color: #E0E6ED;
+    --input-border: #dcdfe6;
+
+    /* Feedback */
+    --success-color: #4CAF50;
+    --error-color: #F44336;
+    --success-bg: #d4edda;
+    --success-text: #155724;
+    --success-border: #c3e6cb;
+    --error-bg: #fee2e2;
+    --error-text: #ef4444;
+    --white: #FFFFFF;
+
+    /* Shadows */
+    --box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --focus-shadow: 0 0 0 3px rgba(74, 111, 165, 0.1);
+
+    /* Typography */
     --serif-font-size: 1rem;
     --line-height-offset: 0.25rem;
 }
@@ -11,8 +48,8 @@
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-    background: linear-gradient(135deg, #6B8FA3 0%, #7A9BB3 100%);
-    color: #2C3E50;
+    background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+    color: var(--text-primary);
     min-height: 100vh;
     padding: 2rem 1rem;
     line-height: 1.6;
@@ -21,10 +58,10 @@ body {
 .container {
     max-width: 1200px;
     margin: 0 auto;
-    background: rgba(255, 255, 255, 0.95);
+    background: var(--bg-container);
     border-radius: 12px;
     padding: 2rem;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--box-shadow);
 }
 
 .logo {
@@ -42,7 +79,7 @@ body {
 }
 
 h1 {
-    color: #4A6FA5;
+    color: var(--primary-color);
     margin-bottom: 1rem;
     font-size: 1.8rem;
     font-weight: 600;
@@ -60,14 +97,14 @@ h1 {
 
 .user-email {
     margin-right: 1rem;
-    color: #666;
+    color: var(--text-secondary);
     font-size: 0.9rem;
 }
 
 .login .header-title {
     text-align: center;
     margin-bottom: 2rem;
-    color: #2c3e50;
+    color: var(--text-primary);
     font-size: 1.5rem;
 }
 
@@ -89,7 +126,7 @@ p:not(.line) {
 }
 
 .daily-reading h2 {
-    color: #4A6FA5;
+    color: var(--primary-color);
     margin-bottom: 1.5rem;
     font-size: 1.4rem;
     font-weight: 500;
@@ -111,7 +148,7 @@ p:not(.line) {
 }
 
 .verse {
-    color: #5A6C7D;
+    color: var(--verse-text);
 }
 
 .verses {
@@ -127,10 +164,10 @@ p:not(.line) {
 .verses li {
     padding: 0.75rem 1rem;
     margin-bottom: 0.75rem;
-    background: #F5F7FA;
-    border-left: 3px solid #6B8FA3;
+    background: var(--bg-light);
+    border-left: 3px solid var(--secondary-color);
     border-radius: 4px;
-    color: #2C3E50;
+    color: var(--text-primary);
     line-height: 1.7;
 }
 
@@ -163,10 +200,10 @@ p:not(.line) {
 .selected-verses-reference {
     margin-bottom: 1rem;
     padding: 0.75rem 1rem;
-    background: #E8F4F8;
-    border-left: 3px solid #4A6FA5;
+    background: var(--bg-highlight);
+    border-left: 3px solid var(--primary-color);
     border-radius: 4px;
-    color: #2C3E50;
+    color: var(--text-primary);
     font-weight: 500;
     font-size: 0.95rem;
     display: none;
@@ -178,7 +215,7 @@ p:not(.line) {
 
 .soap-field label {
     display: block;
-    color: #4A6FA5;
+    color: var(--primary-color);
     font-weight: 500;
     margin-bottom: 0.5rem;
     font-size: 1rem;
@@ -188,13 +225,13 @@ p:not(.line) {
 .soap-field input {
     width: 100%;
     padding: 0.75rem;
-    border: 2px solid #E0E6ED;
+    border: 2px solid var(--border-color);
     border-radius: 6px;
     font-family: inherit;
     font-size: 0.95rem;
     line-height: 1.6;
-    color: #2C3E50;
-    background: #F5F7FA;
+    color: var(--text-primary);
+    background: var(--bg-light);
     resize: vertical;
     transition: border-color 0.2s;
 }
@@ -202,8 +239,8 @@ p:not(.line) {
 .soap-field textarea:focus,
 .soap-field input:focus {
     outline: none;
-    border-color: #6B8FA3;
-    background: #FFFFFF;
+    border-color: var(--secondary-color);
+    background: var(--white);
 }
 
 .save-status {
@@ -213,15 +250,15 @@ p:not(.line) {
 }
 
 .save-status.saving {
-    color: #6B8FA3;
+    color: var(--secondary-color);
 }
 
 .save-status.saved {
-    color: #4CAF50;
+    color: var(--success-color);
 }
 
 .save-status.error {
-    color: #F44336;
+    color: var(--error-color);
 }
 
 .verses-section .verse-content {
@@ -233,7 +270,7 @@ p:not(.line) {
 }
 
 .verse-selected {
-    background-color: #FFF9C4 !important;
+    background-color: var(--bg-selected) !important;
     border-radius: 3px;
     padding: 2px 4px;
     cursor: pointer;
@@ -241,7 +278,7 @@ p:not(.line) {
 
 .verse-num.verse-selected,
 .verse-num.inline.verse-selected {
-    background-color: #FFD54F !important;
+    background-color: var(--bg-selected-num) !important;
     font-weight: bold;
     border-radius: 3px;
     padding: 1px 3px;
@@ -259,7 +296,7 @@ p:not(.line) {
     margin-right: 0.5rem;
     margin-top: 0.1rem;
     margin-bottom: -0.2rem;
-    color: #2C3E50;
+    color: var(--text-primary);
 }
 
 .header-controls {
@@ -271,18 +308,18 @@ p:not(.line) {
 
 .logout-btn {
     text-decoration: none;
-    color: #4A6FA5;
+    color: var(--primary-color);
     font-weight: 500;
     font-size: 0.9rem;
     padding: 0.5rem 1rem;
-    border: 1px solid #4A6FA5;
+    border: 1px solid var(--primary-color);
     border-radius: 4px;
     transition: all 0.2s;
 }
 
 .logout-btn:hover {
-    background-color: #4A6FA5;
-    color: white;
+    background-color: var(--primary-color);
+    color: var(--white);
 }
 
 /* Responsive: stack on narrow screens */
@@ -307,9 +344,9 @@ p:not(.line) {
     max-width: 400px;
     margin: 4rem auto;
     padding: 2rem;
-    background: white;
+    background: var(--white);
     border-radius: 8px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--box-shadow);
 }
 
 .auth-form {
@@ -326,25 +363,25 @@ p:not(.line) {
 
 .form-group label {
     font-weight: 500;
-    color: #2c3e50;
+    color: var(--text-primary);
 }
 
 .form-group input {
     padding: 0.75rem;
-    border: 1px solid #dcdfe6;
+    border: 1px solid var(--input-border);
     border-radius: 4px;
     font-size: 1rem;
 }
 
 .form-group input:focus {
-    border-color: #4a6fa5;
+    border-color: var(--primary-color);
     outline: none;
-    box-shadow: 0 0 0 3px rgba(74, 111, 165, 0.1);
+    box-shadow: var(--focus-shadow);
 }
 
 .auth-btn {
-    background-color: #4a6fa5;
-    color: white;
+    background-color: var(--primary-color);
+    color: var(--white);
     border: none;
     padding: 0.75rem;
     border-radius: 4px;
@@ -355,18 +392,18 @@ p:not(.line) {
 }
 
 .auth-btn:hover {
-    background-color: #3b5a84;
+    background-color: var(--primary-hover);
 }
 
 .auth-switch {
     text-align: center;
     margin-top: 1rem;
     font-size: 0.9rem;
-    color: #666;
+    color: var(--text-secondary);
 }
 
 .auth-switch a {
-    color: #4a6fa5;
+    color: var(--primary-color);
     text-decoration: none;
     font-weight: 500;
 }
@@ -376,8 +413,8 @@ p:not(.line) {
 }
 
 .error-message {
-    background-color: #fee2e2;
-    color: #ef4444;
+    background-color: var(--error-bg);
+    color: var(--error-text);
     padding: 0.75rem;
     border-radius: 4px;
     font-size: 0.9rem;
@@ -391,12 +428,12 @@ p:not(.line) {
 }
 
 .success-message {
-    background-color: #d4edda;
-    color: #155724;
+    background-color: var(--success-bg);
+    color: var(--success-text);
     padding: 0.75rem;
     margin-bottom: 1.25rem;
     border-radius: 4px;
-    border: 1px solid #c3e6cb;
+    border: 1px solid var(--success-border);
     font-size: 0.9rem;
 }
 
@@ -407,7 +444,7 @@ p:not(.line) {
 
 .forgot-password-link {
     font-size: 0.9rem;
-    color: #4A6FA5;
+    color: var(--primary-color);
     text-decoration: none;
 }
 
@@ -418,7 +455,7 @@ p:not(.line) {
 .auth-back-link {
     margin-top: 1.5rem;
     display: block;
-    color: #7f8c8d;
+    color: var(--text-muted);
     text-decoration: none;
     font-size: 0.9rem;
     text-align: center;
@@ -431,8 +468,8 @@ p:not(.line) {
 .site-footer {
     margin-top: 2rem;
     padding-top: 1.5rem;
-    border-top: 1px solid #e0e6ed;
-    color: #666;
+    border-top: 1px solid var(--border-color);
+    color: var(--text-secondary);
     font-size: 0.85rem;
     text-align: center;
 }
@@ -445,13 +482,13 @@ p:not(.line) {
 }
 
 .site-footer a {
-    color: #4A6FA5;
+    color: var(--primary-color);
     text-decoration: none;
     transition: color 0.2s;
 }
 
 .site-footer a:hover {
-    color: #3b5a84;
+    color: var(--primary-hover);
     text-decoration: underline;
 }
 
