@@ -2,12 +2,8 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    {{ template "head.gotmpl" . }}
     <title>Login - Moravian Texts + SOAP</title>
-    <link rel="stylesheet" href="/web/style.css">
-    <link rel="icon" type="image/png" href="/web/favicon.png">
 </head>
 
 <body>
@@ -62,12 +58,7 @@
             Already have an account? <a href="/login">Sign in</a>
             {{end}}
         </div>
-        <footer class="site-footer">
-            <div class="site-footer-content">
-                <span>Email: <a href="mailto:info@mysoaps.net">info@mysoaps.net</a></span>
-                <span>GitHub: <a href="https://github.com/bderrly/daily-soap" target="_blank" rel="noopener noreferrer">bderrly/daily-soap</a></span>
-            </div>
-        </footer>
+        {{ template "footer.gotmpl" . }}
     </div>
     <script src="/web/app.js" nonce="{{.Nonce}}"></script>
 </body>
