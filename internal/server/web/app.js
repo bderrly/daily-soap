@@ -1,420 +1,318 @@
-(function () {
-    // Get timezone
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+import { formatVerseReference, parseVerseId } from './logic.js';
 
-    // If on login/register page, inject it into the form
-    const authForm = document.querySelector('.auth-form');
-    if (authForm) {
-        const tzInput = document.createElement('input');
-        tzInput.type = 'hidden';
-        tzInput.name = 'timezone';
-        tzInput.value = timezone;
-        authForm.appendChild(tzInput);
+const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+// If on login/register page, inject it into the form
+const authForm = document.querySelector('.auth-form');
+if (authForm) {
+    const tzInput = document.createElement('input');
+    tzInput.type = 'hidden';
+    tzInput.name = 'timezone';
+    tzInput.value = timezone;
+    authForm.appendChild(tzInput);
+}
+
+// Get data from the page (set by inline script in HTML)
+let currentDate = window.SOAP_DATA?.date || '';
+const observationField = document.getElementById('observation');
+const applicationField = document.getElementById('application');
+const prayerField = document.getElementById('prayer');
+const saveStatus = document.getElementById('saveStatus');
+const selectedVersesReference = document.getElementById('selectedVersesReference');
+const datePicker = document.getElementById('date-picker');
+
+let saveTimeout = null;
+const SAVE_DELAY = 1000; // 1 second after last change
+
+// Get verse info from a verse element
+function getVerseInfo(element) {
+    // 1. Check for data-ref on the element itself or ancestors
+    const refElement = element.closest('[data-ref]');
+    if (refElement) {
+        const ref = refElement.dataset.ref;
+        return parseVerseId(ref);
     }
 
-    // Get data from the page (set by inline script in HTML)
-    let currentDate = window.SOAP_DATA?.date || '';
-    const observationField = document.getElementById('observation');
-    const applicationField = document.getElementById('application');
-    const prayerField = document.getElementById('prayer');
-    const saveStatus = document.getElementById('saveStatus');
-    const selectedVersesReference = document.getElementById('selectedVersesReference');
-    const datePicker = document.getElementById('date-picker');
+    // 2. Positional fallback: look for preceding verse number (only using .verse-num)
+    const verseContent = element.closest('.verse-content');
+    if (verseContent) {
+        // Get all verse number elements in this container
+        const allVerseNums = Array.from(verseContent.querySelectorAll('.verse-num'));
 
-    let saveTimeout = null;
-    const SAVE_DELAY = 1000; // 1 second after last change
+        if (allVerseNums.length > 0) {
+            // Find the verse number that comes before this element
+            let bestVerseNum = null;
 
-    // Book name mapping (ESV Bible order, 1-indexed, so book 1 = Genesis, book 23 = Isaiah)
-    const bookNames = {
-        1: 'Genesis', 2: 'Exodus', 3: 'Leviticus', 4: 'Numbers', 5: 'Deuteronomy',
-        6: 'Joshua', 7: 'Judges', 8: 'Ruth', 9: '1 Samuel', 10: '2 Samuel',
-        11: '1 Kings', 12: '2 Kings', 13: '1 Chronicles', 14: '2 Chronicles', 15: 'Ezra',
-        16: 'Nehemiah', 17: 'Esther', 18: 'Job', 19: 'Psalm', 20: 'Proverbs',
-        21: 'Ecclesiastes', 22: 'Song of Solomon', 23: 'Isaiah', 24: 'Jeremiah', 25: 'Lamentations',
-        26: 'Ezekiel', 27: 'Daniel', 28: 'Hosea', 29: 'Joel', 30: 'Amos',
-        31: 'Obadiah', 32: 'Jonah', 33: 'Micah', 34: 'Nahum', 35: 'Habakkuk',
-        36: 'Zephaniah', 37: 'Haggai', 38: 'Zechariah', 39: 'Malachi', 40: 'Matthew',
-        41: 'Mark', 42: 'Luke', 43: 'John', 44: 'Acts', 45: 'Romans',
-        46: '1 Corinthians', 47: '2 Corinthians', 48: 'Galatians', 49: 'Ephesians', 50: 'Philippians',
-        51: 'Colossians', 52: '1 Thessalonians', 53: '2 Thessalonians', 54: '1 Timothy', 55: '2 Timothy',
-        56: 'Titus', 57: 'Philemon', 58: 'Hebrews', 59: 'James', 60: '1 Peter',
-        61: '2 Peter', 62: '1 John', 63: '2 John', 64: '3 John', 65: 'Jude', 66: 'Revelation'
-    };
-
-    // Parse verse ID (format: 23063008)
-    function parseVerseId(verseId) {
-        // Strict format: 8 digits
-        const match = verseId.match(/^(\d{2})(\d{3})(\d{3})$/);
-        if (!match) return null;
-        return {
-            book: parseInt(match[1], 10),
-            chapter: parseInt(match[2], 10),
-            verse: parseInt(match[3], 10),
-            id: verseId
-        };
-    }
-
-    // Get verse info from a verse element
-    function getVerseInfo(element) {
-        // 1. Check for data-ref on the element itself or ancestors
-        const refElement = element.closest('[data-ref]');
-        if (refElement) {
-            const ref = refElement.dataset.ref;
-            return parseVerseId(ref);
-        }
-
-        // 2. Positional fallback: look for preceding verse number (only using .verse-num)
-        const verseContent = element.closest('.verse-content');
-        if (verseContent) {
-            // Get all verse number elements in this container
-            const allVerseNums = Array.from(verseContent.querySelectorAll('.verse-num'));
-
-            if (allVerseNums.length > 0) {
-                // Find the verse number that comes before this element
-                let bestVerseNum = null;
-
-                for (const verseNum of allVerseNums) {
-                    const position = element.compareDocumentPosition(verseNum);
-                    if (position & Node.DOCUMENT_POSITION_PRECEDING ||
-                        position & Node.DOCUMENT_POSITION_CONTAINS) {
-                        if (!bestVerseNum) {
+            for (const verseNum of allVerseNums) {
+                const position = element.compareDocumentPosition(verseNum);
+                if (position & Node.DOCUMENT_POSITION_PRECEDING ||
+                    position & Node.DOCUMENT_POSITION_CONTAINS) {
+                    if (!bestVerseNum) {
+                        bestVerseNum = verseNum;
+                    } else {
+                        const bestPos = bestVerseNum.compareDocumentPosition(verseNum);
+                        if (bestPos & Node.DOCUMENT_POSITION_FOLLOWING) {
                             bestVerseNum = verseNum;
-                        } else {
-                            const bestPos = bestVerseNum.compareDocumentPosition(verseNum);
-                            if (bestPos & Node.DOCUMENT_POSITION_FOLLOWING) {
-                                bestVerseNum = verseNum;
-                            }
                         }
                     }
                 }
-
-                if (bestVerseNum) {
-                    // Try to get info from the best verse number found
-                    // It should be a descendant of a [data-ref] span
-                    return getVerseInfo(bestVerseNum);
-                }
-
-                // Fallback: use the first verse number if nothing found
-                const firstVerseNum = allVerseNums[0];
-                if (firstVerseNum) {
-                     return getVerseInfo(firstVerseNum);
-                }
-            }
-        }
-
-        return null;
-    }
-
-    // Store selected verses as array of verse IDs
-    let selectedVerseIds = window.SOAP_DATA?.selectedVerses || [];
-
-    // Format selected verses as reference string (e.g., "Isaiah 63:8-9")
-    function formatVerseReference(verseIds) {
-        if (verseIds.length === 0) return '';
-
-        // Group verses by book and chapter
-        const groups = {};
-        for (const verseId of verseIds) {
-            const baseId = getBaseVerseId(verseId);
-            const info = parseVerseId(baseId);
-            if (!info) continue;
-            const key = `${info.book}-${info.chapter}`;
-            if (!groups[key]) {
-                groups[key] = {
-                    book: info.book,
-                    chapter: info.chapter,
-                    verses: []
-                };
-            }
-            if (!groups[key].verses.includes(info.verse)) {
-                groups[key].verses.push(info.verse);
-            }
-        }
-
-        // Format each group
-        const references = [];
-        for (const key in groups) {
-            const group = groups[key];
-            group.verses.sort((a, b) => a - b);
-            const bookName = bookNames[group.book] || `Book ${group.book}`;
-
-            // Combine contiguous verses into ranges
-            const ranges = [];
-            let rangeStart = group.verses[0];
-            let rangeEnd = group.verses[0];
-
-            for (let i = 1; i < group.verses.length; i++) {
-                if (group.verses[i] === rangeEnd + 1) {
-                    rangeEnd = group.verses[i];
-                } else {
-                    if (rangeStart === rangeEnd) {
-                        ranges.push(rangeStart.toString());
-                    } else {
-                        ranges.push(`${rangeStart}-${rangeEnd}`);
-                    }
-                    rangeStart = group.verses[i];
-                    rangeEnd = group.verses[i];
-                }
-            }
-            // Add the last range
-            if (rangeStart === rangeEnd) {
-                ranges.push(rangeStart.toString());
-            } else {
-                ranges.push(`${rangeStart}-${rangeEnd}`);
             }
 
-            references.push(`${bookName} ${group.chapter}:${ranges.join(',')}`);
-        }
-
-        return references.join('; ');
-    }
-
-    // Update verse reference display
-    function updateVerseReference() {
-        if (!selectedVersesReference) return;
-        const reference = formatVerseReference(selectedVerseIds);
-        if (reference) {
-            selectedVersesReference.textContent = reference;
-            selectedVersesReference.style.display = 'block';
-        } else {
-            selectedVersesReference.textContent = '';
-            selectedVersesReference.style.display = 'none';
-        }
-    }
-
-    // Get the base verse ID (8 digits)
-    function getBaseVerseId(verseId) {
-        return verseId; // Already simple digits in this system
-    }
-
-    // Toggle verse selection
-    function toggleVerseSelection(verseInfo) {
-        if (!verseInfo) return;
-
-        // Use the base verse ID (without suffix) for consistency
-        const baseId = getBaseVerseId(verseInfo.id);
-        const index = selectedVerseIds.findIndex(id => getBaseVerseId(id) === baseId);
-
-        if (index > -1) {
-            // Deselect
-            selectedVerseIds.splice(index, 1);
-            removeVerseHighlight(baseId);
-        } else {
-            // Select - ensure we use the base ID (digits only) or whatever format we prefer
-            // Currently using the returned ID which might be just digits now
-            selectedVerseIds.push(verseInfo.id);
-            highlightVerse(verseInfo.id);
-        }
-
-        updateVerseReference();
-        scheduleSave();
-    }
-
-    // Highlight a verse
-    function highlightVerse(verseId) {
-        const baseId = getBaseVerseId(verseId); // Get 8 digit ref
-        // Select by data-ref
-        const elements = document.querySelectorAll(`[data-ref="${baseId}"]`);
-        elements.forEach(el => el.classList.add('verse-selected'));
-    }
-
-    // Remove verse highlight
-    function removeVerseHighlight(verseId) {
-        const baseId = getBaseVerseId(verseId);
-        const elements = document.querySelectorAll(`[data-ref="${baseId}"]`);
-        elements.forEach(el => el.classList.remove('verse-selected'));
-    }
-
-
-    function refreshHighlights() {
-        // Clear all
-        document.querySelectorAll('.verse-selected').forEach(el => el.classList.remove('verse-selected'));
-
-        // Highlight selected verses
-        const uniqueBaseIds = new Set();
-        selectedVerseIds.forEach(verseId => {
-            const baseId = getBaseVerseId(verseId);
-            if (!uniqueBaseIds.has(baseId)) {
-                uniqueBaseIds.add(baseId);
-                highlightVerse(verseId);
+            if (bestVerseNum) {
+                // Try to get info from the best verse number found
+                // It should be a descendant of a [data-ref] span
+                return getVerseInfo(bestVerseNum);
             }
-        });
 
-        updateVerseReference();
-    }
-
-    function handleVerseClick(e) {
-        // Only handle clicks within a verse inside the verses section
-        if (!e.target.closest('.verses-section .verse-content')) {
-            return;
-        }
-
-        // Prevent selection when clicking headers or extra_text
-        if (e.target.closest('h1, h2, h3, h4, h5, h6, .extra_text')) {
-            return;
-        }
-
-        const verseInfo = getVerseInfo(e.target);
-        if (verseInfo) {
-            e.preventDefault();
-            toggleVerseSelection(verseInfo);
+            // Fallback: use the first verse number if nothing found
+            const firstVerseNum = allVerseNums[0];
+            if (firstVerseNum) {
+                 return getVerseInfo(firstVerseNum);
+            }
         }
     }
 
-    function init() {
-        // Delegate verse clicks to body to handle HTMX swaps
-        document.body.addEventListener('click', handleVerseClick);
+    return null;
+}
+
+// Store selected verses as array of verse IDs
+let selectedVerseIds = window.SOAP_DATA?.selectedVerses || [];
+
+// Update verse reference display
+function updateVerseReference() {
+    if (!selectedVersesReference) return;
+    const reference = formatVerseReference(selectedVerseIds);
+    if (reference) {
+        selectedVersesReference.textContent = reference;
+        selectedVersesReference.style.display = 'block';
+    } else {
+        selectedVersesReference.textContent = '';
+        selectedVersesReference.style.display = 'none';
+    }
+}
+
+// Toggle verse selection
+function toggleVerseSelection(verseInfo) {
+    if (!verseInfo) return;
+
+    // Use the verse ID for consistency
+    const baseId = verseInfo.id;
+    const index = selectedVerseIds.findIndex(id => id === baseId);
+
+    if (index > -1) {
+        // Deselect
+        selectedVerseIds.splice(index, 1);
+        removeVerseHighlight(baseId);
+    } else {
+        // Select
+        selectedVerseIds.push(verseInfo.id);
+        highlightVerse(verseInfo.id);
+    }
+
+    updateVerseReference();
+    scheduleSave();
+}
+
+// Highlight a verse
+function highlightVerse(verseId) {
+    // Select by data-ref
+    const elements = document.querySelectorAll(`[data-ref="${verseId}"]`);
+    elements.forEach(el => el.classList.add('verse-selected'));
+}
+
+// Remove verse highlight
+function removeVerseHighlight(verseId) {
+    const elements = document.querySelectorAll(`[data-ref="${verseId}"]`);
+    elements.forEach(el => el.classList.remove('verse-selected'));
+}
+
+
+function refreshHighlights() {
+    // Clear all
+    document.querySelectorAll('.verse-selected').forEach(el => el.classList.remove('verse-selected'));
+
+    // Highlight selected verses
+    const uniqueIds = new Set();
+    selectedVerseIds.forEach(verseId => {
+        if (!uniqueIds.has(verseId)) {
+            uniqueIds.add(verseId);
+            highlightVerse(verseId);
+        }
+    });
+
+    updateVerseReference();
+}
+
+function handleVerseClick(e) {
+    // Only handle clicks within a verse inside the verses section
+    if (!e.target.closest('.verses-section .verse-content')) {
+        return;
+    }
+
+    // Prevent selection when clicking headers or extra_text
+    if (e.target.closest('h1, h2, h3, h4, h5, h6, .extra_text')) {
+        return;
+    }
+
+    const verseInfo = getVerseInfo(e.target);
+    if (verseInfo) {
+        e.preventDefault();
+        toggleVerseSelection(verseInfo);
+    }
+}
+
+function init() {
+    // Delegate verse clicks to body to handle HTMX swaps
+    document.body.addEventListener('click', handleVerseClick);
+    refreshHighlights();
+}
+
+// Run initialization when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
+}
+
+// Listen for HTMX swaps to re-apply highlighting
+document.body.addEventListener('htmx:afterSwap', function (evt) {
+    if (evt.target.classList.contains('verses-section')) {
         refreshHighlights();
     }
+});
 
-    // Run initialization when DOM is ready
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
+// Configure HTMX to include CSRF token
+document.body.addEventListener('htmx:configRequest', (event) => {
+    if (window.SOAP_DATA?.csrfToken) {
+        event.detail.headers['X-CSRF-Token'] = window.SOAP_DATA.csrfToken;
     }
+});
 
-    // Listen for HTMX swaps to re-apply highlighting
-    document.body.addEventListener('htmx:afterSwap', function (evt) {
-        if (evt.target.classList.contains('verses-section')) {
-            refreshHighlights();
+// Handle date changes
+if (datePicker) {
+    datePicker.addEventListener('change', function (e) {
+        const newDate = datePicker.value;
+        if (newDate === currentDate) return;
+
+        // 1. Save data for the OLD date (currentDate)
+        // Only save if we have a valid current date
+        if (currentDate) {
+            saveData(true);
         }
+
+        // 2. Update current date
+        currentDate = newDate;
+
+        // 3. Load data for the NEW date
+        loadDataForDate(newDate);
     });
+}
 
-    // Configure HTMX to include CSRF token
-    document.body.addEventListener('htmx:configRequest', (event) => {
-        if (window.SOAP_DATA?.csrfToken) {
-            event.detail.headers['X-CSRF-Token'] = window.SOAP_DATA.csrfToken;
-        }
-    });
+function loadDataForDate(dateStr) {
+    // Show loading state?
+    if (observationField) observationField.value = 'Loading...';
+    if (applicationField) applicationField.value = 'Loading...';
+    if (prayerField) prayerField.value = 'Loading...';
 
-    // Handle date changes
-    if (datePicker) {
-        datePicker.addEventListener('change', function (e) {
-            const newDate = datePicker.value;
-            if (newDate === currentDate) return;
+    fetch(`/soap?date=${dateStr}`)
+        .then(response => response.json())
+        .then(data => {
+            // Update fields
+            if (observationField) observationField.value = data.observation || '';
+            if (applicationField) applicationField.value = data.application || '';
+            if (prayerField) prayerField.value = data.prayer || '';
 
-            // 1. Save data for the OLD date (currentDate)
-            // Only save if we have a valid current date
-            if (currentDate) {
-                saveData(true);
+            // Update selected verses
+            selectedVerseIds = data.selectedVerses || [];
+
+            // Update current date from server response (source of truth)
+            if (data.date) {
+                currentDate = data.date;
+                // Ensure date picker reflects the actual date loaded
+                if (datePicker && datePicker.value !== data.date) {
+                    datePicker.value = data.date;
+                }
             }
 
-            // 2. Update current date
-            currentDate = newDate;
-
-            // 3. Load data for the NEW date
-            loadDataForDate(newDate);
-        });
-    }
-
-    function loadDataForDate(dateStr) {
-        // Show loading state?
-        if (observationField) observationField.value = 'Loading...';
-        if (applicationField) applicationField.value = 'Loading...';
-        if (prayerField) prayerField.value = 'Loading...';
-
-        fetch(`/soap?date=${dateStr}`)
-            .then(response => response.json())
-            .then(data => {
-                // Update fields
-                if (observationField) observationField.value = data.observation || '';
-                if (applicationField) applicationField.value = data.application || '';
-                if (prayerField) prayerField.value = data.prayer || '';
-
-                // Update selected verses
-                selectedVerseIds = data.selectedVerses || [];
-
-                // Update current date from server response (source of truth)
-                if (data.date) {
-                    currentDate = data.date;
-                    // Ensure date picker reflects the actual date loaded
-                    if (datePicker && datePicker.value !== data.date) {
-                        datePicker.value = data.date;
-                    }
-                }
-
-                // Refresh highlights
-                refreshHighlights();
-            })
-            .catch(err => {
-                console.error('Failed to load data', err);
-                if (observationField) observationField.value = '';
-                if (applicationField) applicationField.value = '';
-                if (prayerField) prayerField.value = '';
-            });
-    }
-
-    function saveData(immediate = false) {
-        // Guard against saving with empty date
-        if (!currentDate || !observationField) {
-            return;
-        }
-
-        // Capture state at the moment of calling
-        const dataToSave = {
-            date: currentDate, // Use the currentDate scope variable
-            observation: observationField.value,
-            application: applicationField.value,
-            prayer: prayerField.value,
-            selectedVerses: selectedVerseIds
-        };
-
-        if (immediate) {
-            if (saveTimeout) clearTimeout(saveTimeout);
-        }
-
-        if (saveStatus) {
-            saveStatus.textContent = 'Saving...';
-            saveStatus.className = 'save-status saving';
-        }
-
-        fetch('/soap', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-Token': window.SOAP_DATA?.csrfToken
-            },
-            body: JSON.stringify(dataToSave)
+            // Refresh highlights
+            refreshHighlights();
         })
-            .then(response => response.json())
-            .then(result => {
-                if (result.error) {
-                    if (saveStatus) {
-                        saveStatus.textContent = 'Error saving';
-                        saveStatus.className = 'save-status error';
-                    }
-                } else {
-                    if (saveStatus) {
-                        saveStatus.textContent = 'Saved';
-                        saveStatus.className = 'save-status saved';
-                        setTimeout(() => {
-                            // Only clear if status hasn't changed since
-                            if (saveStatus.textContent === 'Saved') {
-                                saveStatus.textContent = '';
-                                saveStatus.className = 'save-status';
-                            }
-                        }, 2000);
-                    }
-                }
-            })
-            .catch(error => {
+        .catch(err => {
+            console.error('Failed to load data', err);
+            if (observationField) observationField.value = '';
+            if (applicationField) applicationField.value = '';
+            if (prayerField) prayerField.value = '';
+        });
+}
+
+function saveData(immediate = false) {
+    // Guard against saving with empty date
+    if (!currentDate || !observationField) {
+        return;
+    }
+
+    const dataToSave = {
+        date: currentDate,
+        observation: observationField.value,
+        application: applicationField.value,
+        prayer: prayerField.value,
+        selectedVerses: selectedVerseIds
+    };
+
+    if (immediate) {
+        if (saveTimeout) clearTimeout(saveTimeout);
+    }
+
+    if (saveStatus) {
+        saveStatus.textContent = 'Saving...';
+        saveStatus.className = 'save-status saving';
+    }
+
+    fetch('/soap', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': window.SOAP_DATA?.csrfToken
+        },
+        body: JSON.stringify(dataToSave)
+    })
+        .then(response => response.json())
+        .then(result => {
+            if (result.error) {
                 if (saveStatus) {
                     saveStatus.textContent = 'Error saving';
                     saveStatus.className = 'save-status error';
                 }
-                console.error('Error:', error);
-            });
-    }
+            } else {
+                if (saveStatus) {
+                    saveStatus.textContent = 'Saved';
+                    saveStatus.className = 'save-status saved';
+                    setTimeout(() => {
+                        // Only clear if status hasn't changed since
+                        if (saveStatus.textContent === 'Saved') {
+                            saveStatus.textContent = '';
+                            saveStatus.className = 'save-status';
+                        }
+                    }, 2000);
+                }
+            }
+        })
+        .catch(error => {
+            if (saveStatus) {
+                saveStatus.textContent = 'Error saving';
+                saveStatus.className = 'save-status error';
+            }
+            console.error('Error:', error);
+        });
+}
 
-    function scheduleSave() {
-        if (saveTimeout) {
-            clearTimeout(saveTimeout);
-        }
-        saveTimeout = setTimeout(saveData, SAVE_DELAY);
+function scheduleSave() {
+    if (saveTimeout) {
+        clearTimeout(saveTimeout);
     }
+    saveTimeout = setTimeout(saveData, SAVE_DELAY);
+}
 
-    if (observationField) observationField.addEventListener('input', scheduleSave);
-    if (applicationField) applicationField.addEventListener('input', scheduleSave);
-    if (prayerField) prayerField.addEventListener('input', scheduleSave);
-})();
+if (observationField) observationField.addEventListener('input', scheduleSave);
+if (applicationField) applicationField.addEventListener('input', scheduleSave);
+if (prayerField) prayerField.addEventListener('input', scheduleSave);
