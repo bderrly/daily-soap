@@ -58,7 +58,7 @@ func TestVersesTemplate(t *testing.T) {
 	if !strings.Contains(output, "ESV Copyright") {
 		t.Errorf("Expected output to contain 'ESV Copyright'")
 	}
-	if !strings.Contains(output, "class=\"passage-content\"") {
-		t.Errorf("Expected output to contain class 'passage-content'")
+	if !strings.Contains(output, "class=\"verse-content\"") {
+		t.Errorf("Expected output to contain class 'verse-content'")
 	}
 }
