@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "daily_soap",
+  "project_id": "bbf3dbe8-48d4-4140-a8b5-63aee0618aad"
+}
