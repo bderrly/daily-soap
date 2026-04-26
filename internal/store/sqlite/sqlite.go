@@ -292,3 +292,65 @@ func (s *Store) QueueEmail(ctx context.Context, email *store.QueuedEmail) error 
 
 	return nil
 }
+
+// GetPendingEmails retrieves pending emails from the queue.
+func (s *Store) GetPendingEmails(ctx context.Context, limit int) ([]*store.QueuedEmail, error) {
+	query := `
+		SELECT id, user_id, recipient, subject, body_html, status, attempts, last_attempt_at, next_attempt_at
+		FROM queued_emails
+		WHERE status = 'pending' AND next_attempt_at <= CURRENT_TIMESTAMP
+		ORDER BY next_attempt_at ASC
+		LIMIT ?
+	`
+	rows, err := s.db.QueryContext(ctx, query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("querying pending emails: %w", err)
+	}
+	defer rows.Close()
+
+	var emails []*store.QueuedEmail
+	for rows.Next() {
+		var email store.QueuedEmail
+		err := rows.Scan(
+			&email.ID, &email.UserID, &email.Recipient, &email.Subject, &email.BodyHTML,
+			&email.Status, &email.Attempts, &email.LastAttemptAt, &email.NextAttemptAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("scanning queued email: %w", err)
+		}
+		emails = append(emails, &email)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+
+	return emails, nil
+}
+
+// UpdateEmailStatus updates the status and next attempt time for a queued email.
+func (s *Store) UpdateEmailStatus(ctx context.Context, id int64, status string, nextAttempt *time.Time) error {
+	query := `
+		UPDATE queued_emails
+		SET status = ?, next_attempt_at = ?, attempts = attempts + 1, last_attempt_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`
+	_, err := s.db.ExecContext(ctx, query, status, nextAttempt, id)
+	if err != nil {
+		return fmt.Errorf("updating email status (id=%d): %w", id, err)
+	}
+	return nil
+}
+
+// MarkEmailSent marks a queued email as sent.
+func (s *Store) MarkEmailSent(ctx context.Context, id int64) error {
+	query := `
+		UPDATE queued_emails
+		SET status = 'sent', last_attempt_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`
+	_, err := s.db.ExecContext(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("marking email as sent (id=%d): %w", id, err)
+	}
+	return nil
+}

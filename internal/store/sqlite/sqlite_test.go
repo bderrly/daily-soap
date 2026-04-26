@@ -405,3 +405,96 @@ func TestStore_QueueEmail(t *testing.T) {
 		t.Errorf("expected 1 email in queue, got %d (err: %v)", count, err)
 	}
 }
+
+func TestStore_GetPendingEmails(t *testing.T) {
+	db := setupTestDB(t)
+	s := New(db)
+	ctx := context.Background()
+
+	_, _ = db.Exec("INSERT INTO users (id, email, password_hash) VALUES (1, 'u@example.com', 'h')")
+
+	now := time.Now().UTC()
+	// Future email
+	_, _ = db.Exec("INSERT INTO queued_emails (user_id, recipient, subject, body_html, status, next_attempt_at) VALUES (1, 'u@example.com', 'future', 'body', 'pending', ?)", now.Add(1*time.Hour))
+	// Past email
+	_, _ = db.Exec("INSERT INTO queued_emails (user_id, recipient, subject, body_html, status, next_attempt_at) VALUES (1, 'u@example.com', 'past', 'body', 'pending', ?)", now.Add(-1*time.Hour))
+	// Sent email
+	_, _ = db.Exec("INSERT INTO queued_emails (user_id, recipient, subject, body_html, status, next_attempt_at) VALUES (1, 'u@example.com', 'sent', 'body', 'sent', ?)", now.Add(-1*time.Hour))
+
+	emails, err := s.GetPendingEmails(ctx, 10)
+	if err != nil {
+		t.Fatalf("GetPendingEmails failed: %v", err)
+	}
+
+	if len(emails) != 1 {
+		t.Errorf("expected 1 pending email, got %d", len(emails))
+	} else if emails[0].Subject != "past" {
+		t.Errorf("expected subject 'past', got %s", emails[0].Subject)
+	}
+}
+
+func TestStore_UpdateEmailStatus(t *testing.T) {
+	db := setupTestDB(t)
+	s := New(db)
+	ctx := context.Background()
+
+	_, _ = db.Exec("INSERT INTO users (id, email, password_hash) VALUES (1, 'u@example.com', 'h')")
+	_, _ = db.Exec("INSERT INTO queued_emails (id, user_id, recipient, subject, body_html, status, attempts) VALUES (1, 1, 'u@example.com', 'subject', 'body', 'pending', 0)")
+
+	nextAttempt := time.Now().UTC().Add(2 * time.Hour)
+	err := s.UpdateEmailStatus(ctx, 1, "failed", &nextAttempt)
+	if err != nil {
+		t.Fatalf("UpdateEmailStatus failed: %v", err)
+	}
+
+	var status string
+	var attempts int
+	var lastAttemptAt *time.Time
+	var nextAttemptAt time.Time
+	err = db.QueryRow("SELECT status, attempts, last_attempt_at, next_attempt_at FROM queued_emails WHERE id = 1").Scan(&status, &attempts, &lastAttemptAt, &nextAttemptAt)
+	if err != nil {
+		t.Fatalf("failed to query email: %v", err)
+	}
+
+	if status != "failed" {
+		t.Errorf("expected status 'failed', got %s", status)
+	}
+	if attempts != 1 {
+		t.Errorf("expected 1 attempt, got %d", attempts)
+	}
+	if lastAttemptAt == nil {
+		t.Error("expected last_attempt_at to be set")
+	}
+	// SQLite driver might return time slightly different due to precision, but let's check it's around what we set
+	if nextAttemptAt.Before(nextAttempt.Add(-1*time.Second)) || nextAttemptAt.After(nextAttempt.Add(1*time.Second)) {
+		t.Errorf("expected next_attempt_at around %v, got %v", nextAttempt, nextAttemptAt)
+	}
+}
+
+func TestStore_MarkEmailSent(t *testing.T) {
+	db := setupTestDB(t)
+	s := New(db)
+	ctx := context.Background()
+
+	_, _ = db.Exec("INSERT INTO users (id, email, password_hash) VALUES (1, 'u@example.com', 'h')")
+	_, _ = db.Exec("INSERT INTO queued_emails (id, user_id, recipient, subject, body_html, status) VALUES (1, 1, 'u@example.com', 'subject', 'body', 'pending')")
+
+	err := s.MarkEmailSent(ctx, 1)
+	if err != nil {
+		t.Fatalf("MarkEmailSent failed: %v", err)
+	}
+
+	var status string
+	var lastAttemptAt *time.Time
+	err = db.QueryRow("SELECT status, last_attempt_at FROM queued_emails WHERE id = 1").Scan(&status, &lastAttemptAt)
+	if err != nil {
+		t.Fatalf("failed to query email: %v", err)
+	}
+
+	if status != "sent" {
+		t.Errorf("expected status 'sent', got %s", status)
+	}
+	if lastAttemptAt == nil {
+		t.Error("expected last_attempt_at to be set")
+	}
+}
