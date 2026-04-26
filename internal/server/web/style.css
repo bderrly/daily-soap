@@ -348,6 +348,7 @@ p:not(.line) {
 
 /* Modal styles */
 .modal {
+    margin: auto;
     border: none;
     border-radius: 12px;
     padding: 0;
