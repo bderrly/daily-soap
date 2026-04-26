@@ -2,6 +2,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"database/sql"
@@ -24,6 +25,7 @@ import (
 	"derrclan.com/moravian-soap/internal/dailytexts"
 	"derrclan.com/moravian-soap/internal/email"
 	"derrclan.com/moravian-soap/internal/esv"
+	"derrclan.com/moravian-soap/internal/export"
 	"derrclan.com/moravian-soap/internal/expunger"
 	"derrclan.com/moravian-soap/internal/migrations"
 	"derrclan.com/moravian-soap/internal/store"
@@ -88,6 +90,7 @@ func Muxer() http.Handler {
 	mux.HandleFunc("/", authMiddleware(handleIndex))
 	mux.HandleFunc("/reading", authMiddleware(handleReading))
 	mux.HandleFunc("/soap", authMiddleware(handleSOAP))
+	mux.HandleFunc("/export", authMiddleware(handleExport))
 
 	// Create a subdirectory filesystem for the web directory
 	webFS, err := fs.Sub(web, "web")
@@ -777,6 +780,14 @@ func InitDB(ctx context.Context) error {
 	// Start the cache expunger service
 	expunger.Start(ctx, appStore)
 
+	// Start email background worker
+	emailClient, err := email.GetClient()
+	if err == nil {
+		go email.StartWorker(ctx, appStore, emailClient)
+	} else {
+		slog.Warn("email worker not started due to missing configuration", "error", err)
+	}
+
 	return nil
 }
 
@@ -838,6 +849,131 @@ func handlePostSOAP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]string{"status": "success"}); err != nil {
 		slog.Error("failed to encode success response", "error", err)
+	}
+}
+
+type exportRequest struct {
+	Date       string   `json:"date"`
+	Format     string   `json:"format"`     // html or markdown
+	Method     string   `json:"method"`     // download or email
+	Recipients []string `json:"recipients"` // only for method=email
+}
+
+// handleExport handles SOAP journal export requests.
+func handleExport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req exportRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		slog.Error("failed to decode export request", "error", err)
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+
+	user := r.Context().Value(userContextKey).(*store.User)
+
+	// Fetch SOAP data via appStore.GetSOAPData(r.Context(), user.ID, req.Date)
+	soapData, err := appStore.GetSOAPData(r.Context(), user.ID, req.Date)
+	if err != nil {
+		slog.Error("failed to get SOAP data for export", "date", req.Date, "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Fetch Scripture content
+	// Get daily text via dailytexts.GetDailyText(req.Date)
+	dailyText, err := dailytexts.GetDailyText(req.Date)
+	if err != nil {
+		slog.Error("failed to get daily text for export", "date", req.Date, "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	if dailyText == nil {
+		slog.Warn("no data found for date", "date", req.Date)
+		http.Error(w, fmt.Sprintf("No data found for date: %s", req.Date), http.StatusNotFound)
+		return
+	}
+
+	// Fetch verse content from ESV API (using cache)
+	verseContents, err := fetchPassagesWithCache(r.Context(), dailyText.Verses)
+	if err != nil {
+		slog.Error("failed to fetch verses for export", "date", req.Date, "error", err)
+		http.Error(w, fmt.Sprintf("Error loading verses for %s", req.Date), http.StatusInternalServerError)
+		return
+	}
+
+	scriptureHTML := strings.Join(verseContents.Passages, "\n")
+
+	// Email Logic:
+	if req.Method == "email" {
+		// Only allow format: html
+		if req.Format != "html" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			if err := json.NewEncoder(w).Encode(map[string]string{"error": "Email export only supports HTML format"}); err != nil {
+				slog.Error("failed to encode error response", "error", err)
+			}
+			return
+		}
+
+		exporter, err := export.NewHTMLExporter()
+		if err != nil {
+			slog.Error("failed to create HTML exporter", "error", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		var buf bytes.Buffer
+		if err := exporter.Export(r.Context(), &buf, soapData, scriptureHTML); err != nil {
+			slog.Error("failed to export HTML for email", "error", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		// Call email.QueueExportEmail(r.Context(), appStore, user, req.Date, req.Recipients, htmlContent)
+		if err := email.QueueExportEmail(r.Context(), appStore, user, req.Date, req.Recipients, buf.String()); err != nil {
+			slog.Error("failed to queue export email", "error", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		// Return 202 Accepted with JSON {"status": "queued"}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		if err := json.NewEncoder(w).Encode(map[string]string{"status": "queued"}); err != nil {
+			slog.Error("failed to encode success response", "error", err)
+		}
+		return
+	}
+
+	// Download Logic:
+	var exporter export.Exporter
+	var filename string
+	if req.Format == "markdown" {
+		exporter, err = export.NewMarkdownExporter()
+		filename = fmt.Sprintf("soap-%s.md", req.Date)
+	} else {
+		exporter, err = export.NewHTMLExporter()
+		filename = fmt.Sprintf("soap-%s.html", req.Date)
+	}
+
+	if err != nil {
+		slog.Error("failed to create exporter", "format", req.Format, "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Set Content-Type and Content-Disposition
+	w.Header().Set("Content-Type", exporter.ContentType())
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+
+	// Write generated content to w
+	if err := exporter.Export(r.Context(), w, soapData, scriptureHTML); err != nil {
+		slog.Error("failed to export content for download", "error", err)
+		// Note: headers already sent, can't change status code easily
 	}
 }
 
