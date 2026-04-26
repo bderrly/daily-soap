@@ -21,6 +21,15 @@ const saveStatus = document.getElementById('saveStatus');
 const selectedVersesReference = document.getElementById('selectedVersesReference');
 const datePicker = document.getElementById('date-picker');
 
+// Export Modal Elements
+const shareBtn = document.getElementById('share-btn');
+const exportModal = document.getElementById('export-modal');
+const closeExportModalBtn = document.getElementById('close-export-modal');
+const exportForm = document.getElementById('export-form');
+const exportMethod = document.getElementById('export-method');
+const recipientsGroup = document.getElementById('recipients-group');
+const recipientsInput = document.getElementById('export-recipients');
+
 let saveTimeout = null;
 const SAVE_DELAY = 1000; // 1 second after last change
 
@@ -165,6 +174,104 @@ function init() {
     // Delegate verse clicks to body to handle HTMX swaps
     document.body.addEventListener('click', handleVerseClick);
     refreshHighlights();
+
+    // Export Modal listeners
+    if (shareBtn && exportModal) {
+        shareBtn.addEventListener('click', () => {
+            exportModal.showModal();
+        });
+    }
+
+    if (closeExportModalBtn && exportModal) {
+        closeExportModalBtn.addEventListener('click', () => {
+            exportModal.close();
+        });
+    }
+
+    if (exportMethod) {
+        exportMethod.addEventListener('change', () => {
+            if (exportMethod.value === 'email') {
+                recipientsGroup.style.display = 'block';
+                recipientsInput.required = true;
+            } else {
+                recipientsGroup.style.display = 'none';
+                recipientsInput.required = false;
+            }
+        });
+    }
+
+    if (exportForm) {
+        exportForm.addEventListener('submit', handleExportSubmit);
+    }
+}
+
+async function handleExportSubmit(e) {
+    e.preventDefault();
+
+    const format = document.getElementById('export-format').value;
+    const method = exportMethod.value;
+    const recipients = recipientsInput.value.split(',').map(s => s.trim()).filter(s => s !== '');
+
+    if (method === 'email' && recipients.length === 0) {
+        alert('Please provide at least one recipient email.');
+        return;
+    }
+
+    const submitBtn = exportForm.querySelector('button[type="submit"]');
+    const originalBtnText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Exporting...';
+
+    try {
+        const response = await fetch('/export', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': window.SOAP_DATA?.csrfToken
+            },
+            body: JSON.stringify({
+                date: currentDate,
+                format: format,
+                method: method,
+                recipients: recipients
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `Server returned ${response.status}`);
+        }
+
+        if (method === 'email') {
+            alert('SOAP entry has been queued for email delivery.');
+            exportModal.close();
+        } else {
+            // Download handling
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const contentDisposition = response.headers.get('Content-Disposition');
+            let filename = `soap-${currentDate}.${format === 'markdown' ? 'md' : 'html'}`;
+
+            if (contentDisposition && contentDisposition.includes('filename=')) {
+                filename = contentDisposition.split('filename=')[1].split(';')[0].replace(/"/g, '').trim();
+            }
+
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            exportModal.close();
+        }
+    } catch (err) {
+        console.error('Export failed:', err);
+        alert('Export failed: ' + err.message);
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalBtnText;
+    }
 }
 
 // Run initialization when DOM is ready

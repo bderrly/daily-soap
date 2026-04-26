@@ -42,14 +42,50 @@
                 </div>
                 <div class="soap-field">
                     <label for="date-picker">Date</label>
-                    <input type="date" id="date-picker" name="date" value="{{.date}}" hx-get="/reading"
-                        hx-target=".verses-section" hx-trigger="change" hx-include="this">
+                    <div class="soap-actions">
+                        <input type="date" id="date-picker" name="date" value="{{.date}}" hx-get="/reading"
+                            hx-target=".verses-section" hx-trigger="change" hx-include="this">
+                        <button type="button" id="share-btn" class="share-btn">Share</button>
+                    </div>
                 </div>
                 <div class="save-status" id="saveStatus"></div>
             </div>
         </div>
         {{ template "footer.gotmpl" . }}
     </div>
+
+    <dialog id="export-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Export SOAP</h2>
+                <button type="button" id="close-export-modal" class="close-btn">&times;</button>
+            </div>
+            <form id="export-form">
+                <div class="form-group">
+                    <label for="export-format">Format</label>
+                    <select id="export-format" name="format">
+                        <option value="html">HTML</option>
+                        <option value="markdown">Markdown</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="export-method">Method</label>
+                    <select id="export-method" name="method">
+                        <option value="download">Download</option>
+                        <option value="email">Email</option>
+                    </select>
+                </div>
+                <div class="form-group" id="recipients-group" style="display: none;">
+                    <label for="export-recipients">Recipients (comma-separated)</label>
+                    <input type="text" id="export-recipients" name="recipients" placeholder="email@example.com">
+                </div>
+                <div class="modal-actions">
+                    <button type="submit" class="auth-btn">Export</button>
+                </div>
+            </form>
+        </div>
+    </dialog>
+
     <script nonce="{{.Nonce}}">
         // Initialize data for the external JavaScript file
         window.SOAP_DATA = {
