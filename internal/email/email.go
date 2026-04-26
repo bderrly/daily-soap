@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"derrclan.com/moravian-soap/internal/store"
 	"github.com/mailgun/mailgun-go/v5"
 )
 
@@ -121,4 +122,22 @@ func (c *Client) send(ctx context.Context, recipient, subject, htmlBody string) 
 	}
 
 	return fmt.Errorf("failed to send email after %d attempts: %w", maxRetries, lastErr)
+}
+
+// QueueExportEmail creates a queued email for each recipient for a SOAP export.
+func QueueExportEmail(ctx context.Context, s store.Store, user *store.User, date string, recipients []string, body string) error {
+	subject := fmt.Sprintf("SOAP Journal Entry - %s", date)
+	for _, recipient := range recipients {
+		email := &store.QueuedEmail{
+			UserID:    user.ID,
+			Recipient: recipient,
+			Subject:   subject,
+			BodyHTML:  body,
+			Status:    "pending",
+		}
+		if err := s.QueueEmail(ctx, email); err != nil {
+			return fmt.Errorf("queuing email for %s: %w", recipient, err)
+		}
+	}
+	return nil
 }
