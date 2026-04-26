@@ -188,17 +188,59 @@ function init() {
         });
     }
 
-    if (exportMethod) {
-        exportMethod.addEventListener('change', () => {
-            if (exportMethod.value === 'email') {
-                recipientsGroup.style.display = 'block';
-                recipientsInput.required = true;
-            } else {
-                recipientsGroup.style.display = 'none';
-                recipientsInput.required = false;
+    // Handle option card clicks
+    const optionCards = document.querySelectorAll('.option-card');
+    optionCards.forEach(card => {
+        card.addEventListener('click', () => {
+            const value = card.dataset.value;
+            const targetId = card.dataset.target;
+            const targetInput = document.getElementById(targetId);
+            
+            if (targetInput) {
+                targetInput.value = value;
+                
+                // Update selected class
+                const grid = card.closest('.option-grid');
+                grid.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
+                card.classList.add('selected');
+                
+                // Trigger logic based on change
+                if (targetId === 'export-method') {
+                    if (value === 'email') {
+                        recipientsGroup.style.display = 'block';
+                        recipientsInput.required = true;
+                        
+                        // Hide Markdown format option
+                        const formatMarkdown = document.getElementById('format-markdown');
+                        if (formatMarkdown) {
+                            formatMarkdown.style.display = 'none';
+                            
+                            // If markdown was selected, switch to HTML
+                            const exportFormat = document.getElementById('export-format');
+                            if (exportFormat && exportFormat.value === 'markdown') {
+                                exportFormat.value = 'html';
+                                const htmlCard = document.querySelector('.option-card[data-value="html"][data-target="export-format"]');
+                                if (htmlCard) {
+                                    const grid = htmlCard.closest('.option-grid');
+                                    grid.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
+                                    htmlCard.classList.add('selected');
+                                }
+                            }
+                        }
+                    } else {
+                        recipientsGroup.style.display = 'none';
+                        recipientsInput.required = false;
+                        
+                        // Show Markdown format option
+                        const formatMarkdown = document.getElementById('format-markdown');
+                        if (formatMarkdown) {
+                            formatMarkdown.style.display = 'flex';
+                        }
+                    }
+                }
             }
         });
-    }
+    });
 
     if (exportForm) {
         exportForm.addEventListener('submit', handleExportSubmit);

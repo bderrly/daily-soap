@@ -61,20 +61,33 @@
                 <button type="button" id="close-export-modal" class="close-btn">&times;</button>
             </div>
             <form id="export-form">
+                <input type="hidden" id="export-method" name="method" value="download">
+                <input type="hidden" id="export-format" name="format" value="html">
+                
                 <div class="form-group">
-                    <label for="export-format">Format</label>
-                    <select id="export-format" name="format">
-                        <option value="html">HTML</option>
-                        <option value="markdown">Markdown</option>
-                    </select>
+                    <label>Method</label>
+                    <div class="option-grid">
+                        <div class="option-card selected" data-value="download" data-target="export-method">
+                            <span>Download</span>
+                        </div>
+                        <div class="option-card" data-value="email" data-target="export-method">
+                            <span>Email</span>
+                        </div>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="export-method">Method</label>
-                    <select id="export-method" name="method">
-                        <option value="download">Download</option>
-                        <option value="email">Email</option>
-                    </select>
+
+                <div class="form-group" id="format-group">
+                    <label>Format</label>
+                    <div class="option-grid">
+                        <div class="option-card selected" data-value="html" data-target="export-format">
+                            <span>HTML</span>
+                        </div>
+                        <div class="option-card" id="format-markdown" data-value="markdown" data-target="export-format">
+                            <span>Markdown</span>
+                        </div>
+                    </div>
                 </div>
+
                 <div class="form-group" id="recipients-group" style="display: none;">
                     <label for="export-recipients">Recipients (comma-separated)</label>
                     <input type="text" id="export-recipients" name="recipients" placeholder="email@example.com">
