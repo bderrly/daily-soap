@@ -374,3 +374,34 @@ func TestStore_ESVCache(t *testing.T) {
 		t.Errorf("expected content, got %s", content)
 	}
 }
+
+func TestStore_QueueEmail(t *testing.T) {
+	db := setupTestDB(t)
+	s := New(db)
+	ctx := context.Background()
+
+	_, _ = db.Exec("INSERT INTO users (id, email, password_hash) VALUES (1, 'u@example.com', 'h')")
+
+	email := &store.QueuedEmail{
+		UserID:    1,
+		Recipient: "u@example.com",
+		Subject:   "Test Subject",
+		BodyHTML:  "<p>Hello</p>",
+		Status:    "pending",
+	}
+
+	err := s.QueueEmail(ctx, email)
+	if err != nil {
+		t.Fatalf("QueueEmail failed: %v", err)
+	}
+
+	if email.ID == 0 {
+		t.Error("expected email.ID to be set")
+	}
+
+	var count int
+	err = db.QueryRow("SELECT COUNT(*) FROM queued_emails").Scan(&count)
+	if err != nil || count != 1 {
+		t.Errorf("expected 1 email in queue, got %d (err: %v)", count, err)
+	}
+}

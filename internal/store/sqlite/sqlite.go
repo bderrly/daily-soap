@@ -269,3 +269,26 @@ func (s *Store) SaveCachedESV(ctx context.Context, key string, content string) e
 	}
 	return nil
 }
+
+// QueueEmail inserts a new email into the delivery queue.
+func (s *Store) QueueEmail(ctx context.Context, email *store.QueuedEmail) error {
+	query := `
+		INSERT INTO queued_emails (user_id, recipient, subject, body_html, status, attempts, last_attempt_at, next_attempt_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	res, err := s.db.ExecContext(ctx, query,
+		email.UserID, email.Recipient, email.Subject, email.BodyHTML,
+		email.Status, email.Attempts, email.LastAttemptAt, email.NextAttemptAt,
+	)
+	if err != nil {
+		return fmt.Errorf("queuing email: %w", err)
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return fmt.Errorf("getting last insert id: %w", err)
+	}
+	email.ID = id
+
+	return nil
+}
