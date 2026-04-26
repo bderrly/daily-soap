@@ -54,6 +54,20 @@ func setupTestDB(t *testing.T) *sql.DB {
 		expires_at DATETIME NOT NULL,
 		FOREIGN KEY(user_id) REFERENCES users(id)
 	);
+	CREATE TABLE queued_emails (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id INTEGER NOT NULL,
+		recipient TEXT NOT NULL,
+		subject TEXT NOT NULL,
+		body_html TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'pending',
+		attempts INTEGER NOT NULL DEFAULT 0,
+		last_attempt_at DATETIME,
+		next_attempt_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (user_id) REFERENCES users(id)
+	);
+	CREATE INDEX idx_queued_emails_status_next_attempt ON queued_emails(status, next_attempt_at);
 	`
 	if _, err := db.Exec(schema); err != nil {
 		t.Fatalf("failed to create schema: %v", err)
