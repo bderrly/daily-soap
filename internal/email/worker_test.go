@@ -21,35 +21,24 @@ type updatedEmail struct {
 	nextAttempt *time.Time
 }
 
-func (m *mockStore) GetPendingEmails(ctx context.Context, limit int) ([]*store.QueuedEmail, error) {
+func (m *mockStore) GetPendingEmails(_ context.Context, limit int) ([]*store.QueuedEmail, error) {
 	if len(m.pendingEmails) > limit {
 		return m.pendingEmails[:limit], nil
 	}
 	return m.pendingEmails, nil
 }
 
-func (m *mockStore) MarkEmailSent(ctx context.Context, id int64) error {
+func (m *mockStore) MarkEmailSent(_ context.Context, id int64) error {
 	m.sentEmails = append(m.sentEmails, id)
 	return nil
 }
 
-func (m *mockStore) UpdateEmailStatus(ctx context.Context, id int64, status string, nextAttempt *time.Time) error {
+func (m *mockStore) UpdateEmailStatus(_ context.Context, id int64, status string, nextAttempt *time.Time) error {
 	m.updatedEmails = append(m.updatedEmails, updatedEmail{id, status, nextAttempt})
 	return nil
 }
 
-type mockMailgun struct {
-	sendErr error
-}
-
-func (m *mockMailgun) Send(ctx context.Context, message any) (string, string, error) {
-	return "", "", m.sendErr
-}
-
-// Implement other Mailgun methods if needed, or use a more targeted mock if possible.
-// Since client.send uses c.mg.Send, we just need that.
-// Actually mailgun.Mailgun is a huge interface.
-
+// TestHandleFailure tests the handleFailure function.
 func TestHandleFailure(t *testing.T) {
 	ms := &mockStore{}
 

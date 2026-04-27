@@ -41,7 +41,7 @@ func GetClient() (*Client, error) {
 
 		defaultClient = &Client{
 			mg:     mg,
-			sender: sender,
+			sender: fmt.Sprintf("My SOAP <%s>", sender),
 			domain: domain,
 		}
 	})
