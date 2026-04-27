@@ -898,7 +898,11 @@ func handleExport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch verse content from ESV API (using cache)
-	verseContents, err := fetchPassagesWithCache(r.Context(), dailyText.Verses)
+	references := dailyText.Verses
+	if len(soapData.SelectedVerses) > 0 {
+		references = []string{esv.FormatReferences(soapData.SelectedVerses)}
+	}
+	verseContents, err := fetchPassagesWithCache(r.Context(), references)
 	if err != nil {
 		slog.Error("failed to fetch verses for export", "date", req.Date, "error", err)
 		http.Error(w, fmt.Sprintf("Error loading verses for %s", req.Date), http.StatusInternalServerError)
