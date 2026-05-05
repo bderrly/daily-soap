@@ -2,7 +2,7 @@ package email
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 
 	"derrclan.com/moravian-soap/internal/store"
@@ -26,20 +26,23 @@ func StartWorker(ctx context.Context, s store.Store, client *Client) {
 func processPendingEmails(ctx context.Context, s store.Store, client *Client) {
 	emails, err := s.GetPendingEmails(ctx, 10)
 	if err != nil {
-		log.Printf("error getting pending emails: %v", err)
+		slog.Error("error getting pending emails", "error", err)
 		return
 	}
 
 	for _, e := range emails {
-		err := client.send(ctx, e.Recipient, e.Subject, e.BodyHTML)
+		err := client.send(ctx, e.Recipient, e.Subject, e.BodyHTML, "sent queued email")
 		if err != nil {
-			log.Printf("error sending email %d to %s: %v", e.ID, e.Recipient, err)
+			slog.Error("error sending email", "email_id", e.ID, "recipient", e.Recipient, "error", err)
 			handleFailure(ctx, s, e)
 			continue
 		}
 
+		// Log success with additional context
+		slog.Info("successfully sent queued email", "email_id", e.ID, "recipient", e.Recipient, "user_id", e.UserID, "subject", e.Subject)
+
 		if err := s.MarkEmailSent(ctx, e.ID); err != nil {
-			log.Printf("error marking email %d as sent: %v", e.ID, err)
+			slog.Error("error marking email as sent", "email_id", e.ID, "error", err)
 		}
 	}
 }
@@ -53,7 +56,7 @@ func handleFailure(ctx context.Context, s store.Store, e *store.QueuedEmail) {
 
 	if newAttempts >= 5 {
 		if err := s.UpdateEmailStatus(ctx, e.ID, "failed", nil); err != nil {
-			log.Printf("error setting email %d status to failed: %v", e.ID, err)
+			slog.Error("error setting email status to failed", "email_id", e.ID, "error", err)
 		}
 		return
 	}
@@ -63,6 +66,6 @@ func handleFailure(ctx context.Context, s store.Store, e *store.QueuedEmail) {
 	nextAttempt := time.Now().Add(time.Duration(backoffMinutes) * time.Minute)
 
 	if err := s.UpdateEmailStatus(ctx, e.ID, "pending", &nextAttempt); err != nil {
-		log.Printf("error updating email %d status: %v", e.ID, err)
+		slog.Error("error updating email status", "email_id", e.ID, "error", err)
 	}
 }

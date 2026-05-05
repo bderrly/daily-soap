@@ -4,6 +4,7 @@ package email
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"sync"
 	"time"
@@ -66,7 +67,7 @@ func (c *Client) SendWelcomeEmail(ctx context.Context, recipientEmail, confirmat
 </html>
 `, confirmationURL, confirmationURL)
 
-	return c.send(ctx, recipientEmail, subject, body)
+	return c.send(ctx, recipientEmail, subject, body, "sent welcome email")
 }
 
 // SendPasswordResetEmail sends a password reset email using the client instance.
@@ -87,11 +88,11 @@ func (c *Client) SendPasswordResetEmail(ctx context.Context, recipientEmail, res
 </html>
 `, resetURL, resetURL)
 
-	return c.send(ctx, recipientEmail, subject, body)
+	return c.send(ctx, recipientEmail, subject, body, "sent password reset email")
 }
 
 // send handles the actual email sending with exponential backoff retry logic.
-func (c *Client) send(ctx context.Context, recipient, subject, htmlBody string) error {
+func (c *Client) send(ctx context.Context, recipient, subject, htmlBody, logMsg string) error {
 	message := mailgun.NewMessage(c.domain, c.sender, subject, "")
 	if err := message.AddRecipient(recipient); err != nil {
 		return fmt.Errorf("adding recipient %q: %w", recipient, err)
@@ -108,6 +109,7 @@ func (c *Client) send(ctx context.Context, recipient, subject, htmlBody string) 
 		cancel()
 
 		if lastErr == nil {
+			slog.Info(logMsg, "recipient", recipient, "subject", subject)
 			return nil
 		}
 
