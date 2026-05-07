@@ -60,4 +60,5 @@ type Store interface {
 	UpdateUserPassword(ctx context.Context, userID int64, passwordHash string) error
 	UpdateUserPasswordHash(ctx context.Context, userID int64, newHash string) error
 	UpdateUserTimezone(ctx context.Context, userID int64, timezone string) error
+	GetSOAPDataRange(ctx context.Context, userID int64, startDate string, endDate string) ([]*SOAPData, error)
 }

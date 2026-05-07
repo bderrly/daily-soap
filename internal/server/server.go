@@ -91,6 +91,7 @@ func Muxer() http.Handler {
 	mux.HandleFunc("/reading", authMiddleware(handleReading))
 	mux.HandleFunc("/soap", authMiddleware(handleSOAP))
 	mux.HandleFunc("/export", authMiddleware(handleExport))
+	mux.HandleFunc("/history", authMiddleware(handleHistory))
 
 	// Create a subdirectory filesystem for the web directory
 	webFS, err := fs.Sub(web, "web")
@@ -1060,6 +1061,101 @@ func createSession(ctx context.Context, userID int64) (string, error) {
 		return "", fmt.Errorf("saving session for user %d: %w", userID, err)
 	}
 	return token, nil
+}
+
+type HistoryEntry struct {
+	Date         string
+	Observation  string
+	Application  string
+	Prayer       string
+	PassagesHTML []template.HTML
+}
+
+func handleHistory(w http.ResponseWriter, r *http.Request) {
+	user := r.Context().Value(userContextKey).(*store.User)
+	loc, err := time.LoadLocation(user.Timezone)
+	if err != nil {
+		loc = time.UTC
+	}
+
+	endDateStr := r.URL.Query().Get("end_date")
+	if endDateStr == "" {
+		endDateStr = time.Now().In(loc).Format(time.DateOnly)
+	}
+
+	endDate, err := time.Parse(time.DateOnly, endDateStr)
+	if err != nil {
+		endDate = time.Now().In(loc)
+		endDateStr = endDate.Format(time.DateOnly)
+	}
+
+	daysStr := r.URL.Query().Get("days")
+	days := 7
+	if daysStr == "14" {
+		days = 14
+	} else if daysStr == "30" {
+		days = 30
+	}
+
+	startDate := endDate.AddDate(0, 0, -(days - 1))
+	startDateStr := startDate.Format(time.DateOnly)
+
+	nextEndDate := endDate.AddDate(0, 0, days)
+	if nextEndDate.After(time.Now().In(loc)) {
+		nextEndDate = time.Now().In(loc)
+	}
+	prevEndDate := endDate.AddDate(0, 0, -days)
+
+	entries, err := appStore.GetSOAPDataRange(r.Context(), user.ID, startDateStr, endDateStr)
+	if err != nil {
+		slog.Error("failed to get history data", "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	var historyEntries []HistoryEntry
+	for _, entry := range entries {
+		var htmlPassages []template.HTML
+
+		if len(entry.SelectedVerses) > 0 {
+			references := []string{esv.FormatReferences(entry.SelectedVerses)}
+			esvRes, err := fetchPassagesWithCache(r.Context(), references)
+			if err != nil {
+				slog.Error("failed to fetch verses for history", "date", entry.Date, "error", err)
+			} else {
+				for _, p := range esvRes.Passages {
+					htmlPassages = append(htmlPassages, template.HTML(p)) // #nosec G203
+				}
+			}
+		}
+
+		historyEntries = append(historyEntries, HistoryEntry{
+			Date:         entry.Date,
+			Observation:  entry.Observation,
+			Application:  entry.Application,
+			Prayer:       entry.Prayer,
+			PassagesHTML: htmlPassages,
+		})
+	}
+
+	data := map[string]any{
+		"Entries":     historyEntries,
+		"Days":        days,
+		"EndDate":     endDateStr,
+		"StartDate":   startDateStr,
+		"PrevEndDate": prevEndDate.Format(time.DateOnly),
+		"NextEndDate": nextEndDate.Format(time.DateOnly),
+		"ShowNext":    nextEndDate.After(endDate) || endDate.Format(time.DateOnly) != time.Now().In(loc).Format(time.DateOnly),
+		"User":        user,
+		"CSRFToken":   r.Context().Value(csrfContextKey).(string),
+		"Nonce":       r.Context().Value(nonceContextKey).(string),
+	}
+
+	if err := tmpl.ExecuteTemplate(w, "history.html", data); err != nil {
+		slog.Error("failed to execute history template", "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
 }
 
 // fetchPassagesWithCache fetches verses from the cache or the ESV API.

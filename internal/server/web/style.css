@@ -613,3 +613,122 @@ p:not(.line) {
         gap: 0.5rem;
     }
 }
+
+/* History Page Styles */
+.history-btn {
+    margin-right: 15px;
+    text-decoration: none;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.history-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: var(--white);
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.nav-btn {
+    padding: 8px 16px;
+    background: var(--bg-highlight);
+    border-radius: 4px;
+    text-decoration: none;
+    color: var(--text-primary);
+}
+
+.history-viewing {
+    font-weight: bold;
+    color: var(--text-primary);
+}
+
+.history-form-controls {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.history-form {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.history-form label {
+    color: var(--text-primary);
+    font-weight: bold;
+}
+
+.history-form select {
+    padding: 6px;
+    border-radius: 4px;
+    border: 1px solid var(--input-border);
+}
+
+.nav-btn-disabled {
+    padding: 8px 16px;
+    color: var(--text-muted);
+}
+
+.history-empty {
+    text-align: center;
+    padding: 40px;
+    background: var(--white);
+    border-radius: 8px;
+    color: var(--text-secondary);
+}
+
+.history-entry {
+    background: var(--white);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.history-entry-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+}
+
+.history-entry-header h2 {
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.history-entry-edit {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-size: 0.9em;
+}
+
+.history-passages {
+    background: var(--bg-light);
+    padding: 15px;
+    border-radius: 6px;
+    margin-bottom: 15px;
+}
+
+.history-section {
+    margin-bottom: 15px;
+}
+
+.history-section h3 {
+    margin: 0 0 5px 0;
+    color: var(--text-primary);
+    font-size: 1.1em;
+}
+
+.history-section-content {
+    white-space: pre-wrap;
+    color: var(--text-primary);
+}

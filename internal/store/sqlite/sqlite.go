@@ -72,6 +72,41 @@ func (s *Store) GetSOAPData(ctx context.Context, userID int64, dateStr string) (
 	return &soapData, nil
 }
 
+// GetSOAPDataRange retrieves SOAP data from the database for a given user and date range.
+func (s *Store) GetSOAPDataRange(ctx context.Context, userID int64, startDate string, endDate string) ([]*store.SOAPData, error) {
+	query := `SELECT date, observation, application, prayer, selected_verses
+			  FROM journal
+			  WHERE user_id = ? AND date >= ? AND date <= ?
+			  ORDER BY date DESC`
+	rows, err := s.db.QueryContext(ctx, query, userID, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("querying SOAP data range: %w", err)
+	}
+	defer rows.Close()
+
+	var entries []*store.SOAPData
+	for rows.Next() {
+		var soapData store.SOAPData
+		var selectedVersesJSON sql.NullString
+		if err := rows.Scan(&soapData.Date, &soapData.Observation, &soapData.Application, &soapData.Prayer, &selectedVersesJSON); err != nil {
+			return nil, fmt.Errorf("scanning SOAP data range row: %w", err)
+		}
+		if selectedVersesJSON.Valid && selectedVersesJSON.String != "" {
+			if err := json.Unmarshal([]byte(selectedVersesJSON.String), &soapData.SelectedVerses); err != nil {
+				slog.Error("failed to unmarshal (JSON) selected verses in range", "error", err, "userID", userID, "date", soapData.Date)
+				soapData.SelectedVerses = []string{}
+			}
+		} else {
+			soapData.SelectedVerses = []string{}
+		}
+		entries = append(entries, &soapData)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error in SOAP data range: %w", err)
+	}
+	return entries, nil
+}
+
 // SaveSOAPData saves SOAP data to the database.
 func (s *Store) SaveSOAPData(ctx context.Context, userID int64, soapData *store.SOAPData) error {
 	selectedVersesJSON, err := json.Marshal(soapData.SelectedVerses)

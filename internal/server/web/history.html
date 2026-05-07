@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    {{ template "head.gotmpl" . }}
+    <title>SOAP History</title>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header-controls">
+            <div class="header-brand">
+                <img src="/web/bible.svg" class="logo" alt="Bible Logo">
+                <h1 class="header-title">SOAP History</h1>
+            </div>
+            <div>
+                <a href="/" class="history-btn">Back to Today</a>
+                <span class="user-email">{{.User.Email}}</span>
+                <a href="/logout" class="logout-btn">Sign Out</a>
+            </div>
+        </div>
+
+        <div class="history-controls">
+            <div>
+                <a href="/history?end_date={{.PrevEndDate}}&days={{.Days}}" class="nav-btn">&larr; Previous {{.Days}} Days</a>
+            </div>
+
+            <div class="history-viewing">
+                Viewing {{.StartDate}} to {{.EndDate}}
+            </div>
+
+            <div class="history-form-controls">
+                <form id="history-form" action="/history" method="get" class="history-form">
+                    <input type="hidden" name="end_date" value="{{.EndDate}}">
+                    <label for="days">View:</label>
+                    <select name="days" id="days"
+                        hx-get="/history"
+                        hx-include="#history-form"
+                        hx-target="body"
+                        hx-push-url="true">
+                        <option value="7" {{if eq .Days 7}}selected{{end}}>7 Days</option>
+                        <option value="14" {{if eq .Days 14}}selected{{end}}>14 Days</option>
+                        <option value="30" {{if eq .Days 30}}selected{{end}}>30 Days</option>
+                    </select>
+                </form>
+
+                {{if .ShowNext}}
+                <a href="/history?end_date={{.NextEndDate}}&days={{.Days}}" class="nav-btn">Next {{.Days}} Days &rarr;</a>
+                {{else}}
+                <span class="nav-btn-disabled">Next {{.Days}} Days &rarr;</span>
+                {{end}}
+            </div>
+        </div>
+
+        <div class="history-entries">
+            {{if not .Entries}}
+            <div class="history-empty">
+                No journal entries found in this date range.
+            </div>
+            {{else}}
+                {{range .Entries}}
+                <div class="history-entry">
+                    <div class="history-entry-header">
+                        <h2>{{.Date}}</h2>
+                        <a href="/?date={{.Date}}" class="history-entry-edit">Edit</a>
+                    </div>
+
+                    {{if .PassagesHTML}}
+                    <div class="history-passages">
+                        {{range .PassagesHTML}}
+                            <div class="passage-html">{{.}}</div>
+                        {{end}}
+                    </div>
+                    {{end}}
+
+                    {{if .Observation}}
+                    <div class="history-section">
+                        <h3>Observation</h3>
+                        <div class="history-section-content">{{.Observation}}</div>
+                    </div>
+                    {{end}}
+
+                    {{if .Application}}
+                    <div class="history-section">
+                        <h3>Application</h3>
+                        <div class="history-section-content">{{.Application}}</div>
+                    </div>
+                    {{end}}
+
+                    {{if .Prayer}}
+                    <div class="history-section">
+                        <h3>Prayer</h3>
+                        <div class="history-section-content">{{.Prayer}}</div>
+                    </div>
+                    {{end}}
+                </div>
+                {{end}}
+            {{end}}
+        </div>
+
+        {{ template "footer.gotmpl" . }}
+    </div>
+
+    <script src="/web/htmx.min.js" nonce="{{.Nonce}}"></script>
+</body>
+</html>
