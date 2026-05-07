@@ -9,7 +9,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"derrclan.com/moravian-soap/internal/esv"
+	"github.com/bderrly/daily-soap/internal/esv"
 )
 
 // fetchPassagesWithCache fetches verses from the cache or the ESV API.

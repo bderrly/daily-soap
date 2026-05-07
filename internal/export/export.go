@@ -5,7 +5,7 @@ import (
 	"context"
 	"io"
 
-	"derrclan.com/moravian-soap/internal/store"
+	"github.com/bderrly/daily-soap/internal/store"
 )
 
 // Exporter defines the interface for exporting SOAP entries in different formats

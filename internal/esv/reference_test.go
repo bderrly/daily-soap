@@ -3,7 +3,7 @@ package esv_test
 import (
 	"testing"
 
-	"derrclan.com/moravian-soap/internal/esv"
+	"github.com/bderrly/daily-soap/internal/esv"
 )
 
 func TestFormatReferences(t *testing.T) {

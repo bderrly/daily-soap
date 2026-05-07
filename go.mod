@@ -1,4 +1,4 @@
-module derrclan.com/moravian-soap
+module github.com/bderrly/daily-soap
 
 go 1.25.5
 

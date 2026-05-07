@@ -14,7 +14,7 @@ import (
 
 	"github.com/joho/godotenv"
 
-	"derrclan.com/moravian-soap/internal/server"
+	"github.com/bderrly/daily-soap/internal/server"
 )
 
 func main() {

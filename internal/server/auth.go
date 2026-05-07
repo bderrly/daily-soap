@@ -8,8 +8,8 @@ import (
 	"log/slog"
 	"time"
 
-	"derrclan.com/moravian-soap/internal/auth"
-	"derrclan.com/moravian-soap/internal/store"
+	"github.com/bderrly/daily-soap/internal/auth"
+	"github.com/bderrly/daily-soap/internal/store"
 )
 
 func generateRandomString(n int) string {

@@ -6,7 +6,7 @@ import (
 	"io"
 	"text/template"
 
-	"derrclan.com/moravian-soap/internal/store"
+	"github.com/bderrly/daily-soap/internal/store"
 )
 
 // MarkdownExporter implements the Exporter interface for Markdown format.

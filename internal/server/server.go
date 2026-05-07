@@ -15,11 +15,11 @@ import (
 	"os"
 	_ "time/tzdata"
 
-	"derrclan.com/moravian-soap/internal/email"
-	"derrclan.com/moravian-soap/internal/expunger"
-	"derrclan.com/moravian-soap/internal/migrations"
-	"derrclan.com/moravian-soap/internal/store"
-	"derrclan.com/moravian-soap/internal/store/sqlite"
+	"github.com/bderrly/daily-soap/internal/email"
+	"github.com/bderrly/daily-soap/internal/expunger"
+	"github.com/bderrly/daily-soap/internal/migrations"
+	"github.com/bderrly/daily-soap/internal/store"
+	"github.com/bderrly/daily-soap/internal/store/sqlite"
 
 	_ "github.com/mattn/go-sqlite3"
 )

@@ -10,11 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"derrclan.com/moravian-soap/internal/dailytexts"
-	"derrclan.com/moravian-soap/internal/email"
-	"derrclan.com/moravian-soap/internal/esv"
-	"derrclan.com/moravian-soap/internal/export"
-	"derrclan.com/moravian-soap/internal/store"
+	"github.com/bderrly/daily-soap/internal/dailytexts"
+	"github.com/bderrly/daily-soap/internal/email"
+	"github.com/bderrly/daily-soap/internal/esv"
+	"github.com/bderrly/daily-soap/internal/export"
+	"github.com/bderrly/daily-soap/internal/store"
 )
 
 func handleIndex(w http.ResponseWriter, r *http.Request) {

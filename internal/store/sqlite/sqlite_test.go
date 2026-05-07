@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"derrclan.com/moravian-soap/internal/store"
+	"github.com/bderrly/daily-soap/internal/store"
 	_ "github.com/mattn/go-sqlite3"
 )
 

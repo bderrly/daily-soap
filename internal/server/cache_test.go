@@ -9,8 +9,8 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"derrclan.com/moravian-soap/internal/esv"
-	"derrclan.com/moravian-soap/internal/store/sqlite"
+	"github.com/bderrly/daily-soap/internal/esv"
+	"github.com/bderrly/daily-soap/internal/store/sqlite"
 )
 
 func TestFetchPassagesWithCache_Hit(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"testing"
 
-	"derrclan.com/moravian-soap/internal/store/sqlite"
+	"github.com/bderrly/daily-soap/internal/store/sqlite"
 	_ "github.com/mattn/go-sqlite3"
 )
 

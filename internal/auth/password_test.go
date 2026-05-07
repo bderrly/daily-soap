@@ -8,7 +8,7 @@ import (
 	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/bcrypt"
 
-	"derrclan.com/moravian-soap/internal/auth"
+	"github.com/bderrly/daily-soap/internal/auth"
 )
 
 func TestHashAndVerify(t *testing.T) {

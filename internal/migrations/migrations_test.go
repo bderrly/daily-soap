@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"testing"
 
-	"derrclan.com/moravian-soap/internal/migrations"
+	"github.com/bderrly/daily-soap/internal/migrations"
 	_ "github.com/mattn/go-sqlite3"
 )
 

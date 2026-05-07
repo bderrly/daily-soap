@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"time"
 
-	"derrclan.com/moravian-soap/internal/store"
+	"github.com/bderrly/daily-soap/internal/store"
 )
 
 // StartWorker starts a background worker that polls for pending emails and sends them.

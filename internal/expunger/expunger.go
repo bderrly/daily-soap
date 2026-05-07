@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"time"
 
-	"derrclan.com/moravian-soap/internal/store"
+	"github.com/bderrly/daily-soap/internal/store"
 )
 
 // Start initializes the cache expunger service.

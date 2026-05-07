@@ -7,7 +7,7 @@ import (
 	"html/template"
 	"io"
 
-	"derrclan.com/moravian-soap/internal/store"
+	"github.com/bderrly/daily-soap/internal/store"
 )
 
 // HTMLExporter implements the Exporter interface for HTML format.

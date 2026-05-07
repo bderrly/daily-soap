@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"derrclan.com/moravian-soap/internal/store"
+	"github.com/bderrly/daily-soap/internal/store"
 	"github.com/mailgun/mailgun-go/v5"
 )
 

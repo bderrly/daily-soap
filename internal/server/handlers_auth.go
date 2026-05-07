@@ -11,9 +11,9 @@ import (
 	"os"
 	"time"
 
-	"derrclan.com/moravian-soap/internal/auth"
-	"derrclan.com/moravian-soap/internal/email"
-	"derrclan.com/moravian-soap/internal/store"
+	"github.com/bderrly/daily-soap/internal/auth"
+	"github.com/bderrly/daily-soap/internal/email"
+	"github.com/bderrly/daily-soap/internal/store"
 )
 
 func handleLogin(w http.ResponseWriter, r *http.Request) {

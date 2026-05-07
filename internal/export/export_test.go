@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"derrclan.com/moravian-soap/internal/export"
-	"derrclan.com/moravian-soap/internal/store"
+	"github.com/bderrly/daily-soap/internal/export"
+	"github.com/bderrly/daily-soap/internal/store"
 )
 
 func TestHTMLExporter(t *testing.T) {
