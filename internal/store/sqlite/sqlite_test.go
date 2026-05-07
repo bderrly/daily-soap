@@ -348,12 +348,15 @@ func TestStore_ConfirmUser(t *testing.T) {
 	ctx := context.Background()
 
 	_, _ = db.Exec("INSERT INTO users (id, email, password_hash, verification_token) VALUES (1, 'c@example.com', 'h', 'token123')")
-	rows, err := s.ConfirmUser(ctx, "token123")
+	userID, email, err := s.ConfirmUser(ctx, "token123")
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
-	if rows != 1 {
-		t.Errorf("expected 1 row affected, got %d", rows)
+	if userID != 1 {
+		t.Errorf("expected userID 1, got %d", userID)
+	}
+	if email != "c@example.com" {
+		t.Errorf("expected email c@example.com, got %s", email)
 	}
 }
 

@@ -119,16 +119,18 @@ func (s *Store) UpdateUserTimezone(ctx context.Context, userID int64, timezone s
 }
 
 // ConfirmUser verifies a user by token.
-func (s *Store) ConfirmUser(ctx context.Context, token string) (int64, error) {
-	result, err := s.db.ExecContext(ctx, "UPDATE users SET is_verified = 1, verification_token = NULL WHERE verification_token = ?", token)
+func (s *Store) ConfirmUser(ctx context.Context, token string) (int64, string, error) {
+	var userID int64
+	var email string
+	query := "UPDATE users SET is_verified = 1, verification_token = NULL WHERE verification_token = ? RETURNING id, email"
+	err := s.db.QueryRowContext(ctx, query, token).Scan(&userID, &email)
 	if err != nil {
-		return 0, fmt.Errorf("verifying user: %w", err)
+		if err == sql.ErrNoRows {
+			return 0, "", nil
+		}
+		return 0, "", fmt.Errorf("verifying user: %w", err)
 	}
-	n, err := result.RowsAffected()
-	if err != nil {
-		return 0, fmt.Errorf("getting rows affected: %w", err)
-	}
-	return n, nil
+	return userID, email, nil
 }
 
 // GetUserByEmail retrieves a user by their email.

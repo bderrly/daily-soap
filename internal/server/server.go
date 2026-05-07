@@ -375,14 +375,14 @@ func handleConfirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rowsAffected, err := appStore.ConfirmUser(r.Context(), token)
+	userID, emailStr, err := appStore.ConfirmUser(r.Context(), token)
 	if err != nil {
 		slog.Error("failed to verify user", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
-	if rowsAffected == 0 {
+	if userID == 0 {
 		data := map[string]any{
 			"IsLogin":   true,
 			"Error":     "Invalid or expired verification token.",
@@ -393,6 +393,23 @@ func handleConfirm(w http.ResponseWriter, r *http.Request) {
 			slog.Error("failed to execute login template", "error", err)
 		}
 		return
+	}
+
+	// Notify admin
+	adminEmail := os.Getenv("ADMIN_EMAIL")
+	if adminEmail != "" {
+		notification := &store.QueuedEmail{
+			UserID:        userID,
+			Recipient:     adminEmail,
+			Subject:       "New User Registration: " + emailStr,
+			BodyHTML:      "A new user has registered and verified their account: " + emailStr,
+			Status:        "pending",
+			Attempts:      0,
+			NextAttemptAt: time.Now(),
+		}
+		if err := appStore.QueueEmail(r.Context(), notification); err != nil {
+			slog.Error("failed to queue admin notification email", "error", err, "admin_email", adminEmail, "user_email", emailStr)
+		}
 	}
 
 	data := map[string]any{

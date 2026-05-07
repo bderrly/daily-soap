@@ -38,7 +38,7 @@ type SOAPData struct {
 
 // Store defines the interface for database operations.
 type Store interface {
-	ConfirmUser(ctx context.Context, token string) (int64, error) // returns rows affected
+	ConfirmUser(ctx context.Context, token string) (userID int64, email string, err error) // returns userID, email
 	CreatePasswordResetToken(ctx context.Context, token string, userID int64, expiresAt time.Time) error
 	CreateSession(ctx context.Context, token string, userID int64, expiresAt time.Time) error
 	CreateUser(ctx context.Context, email, passwordHash, token, timezone string) error
