@@ -331,6 +331,7 @@ func handleExport(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HistoryEntry represents a single SOAP journal entry in the history view.
 type HistoryEntry struct {
 	Date         string
 	Observation  string
@@ -359,9 +360,10 @@ func handleHistory(w http.ResponseWriter, r *http.Request) {
 
 	daysStr := r.URL.Query().Get("days")
 	days := 7
-	if daysStr == "14" {
+	switch daysStr {
+	case "14":
 		days = 14
-	} else if daysStr == "30" {
+	case "30":
 		days = 30
 	}
 

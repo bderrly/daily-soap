@@ -82,7 +82,9 @@ func (s *Store) GetSOAPDataRange(ctx context.Context, userID int64, startDate st
 	if err != nil {
 		return nil, fmt.Errorf("querying SOAP data range: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var entries []*store.SOAPData
 	for rows.Next() {
@@ -343,7 +345,9 @@ func (s *Store) GetPendingEmails(ctx context.Context, limit int) ([]*store.Queue
 	if err != nil {
 		return nil, fmt.Errorf("querying pending emails: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var emails []*store.QueuedEmail
 	for rows.Next() {

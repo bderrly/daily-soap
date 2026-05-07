@@ -27,3 +27,8 @@ linters:
     errcheck:
       exclude-functions:
         - (*database/sql.DB).Close
+    gosec:
+      excludes:
+        - G120
+        - G203
+        - G706

@@ -51,10 +51,10 @@ func authenticateUser(ctx context.Context, email, password string) (*store.User,
 		if err == nil {
 			err = appStore.UpdateUserPasswordHash(ctx, id, newHash)
 			if err != nil {
-				slog.Error("failed to migrate password hash", "user_id", id, "error", err)
+				slog.Error("failed to migrate password hash", slog.Int64("user_id", id), slog.Any("error", err))
 			}
 		} else {
-			slog.Error("failed to generate new hash for migration", "user_id", id, "error", err)
+			slog.Error("failed to generate new hash for migration", slog.Int64("user_id", id), slog.Any("error", err))
 		}
 	}
 

@@ -35,15 +35,15 @@ func parseVerseID(id string) (*verseInfo, error) {
 	}
 	book, err := strconv.Atoi(id[0:2])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parsing book ID: %w", err)
 	}
 	chapter, err := strconv.Atoi(id[2:5])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parsing chapter ID: %w", err)
 	}
 	verse, err := strconv.Atoi(id[5:8])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parsing verse ID: %w", err)
 	}
 	return &verseInfo{book: book, chapter: chapter, verse: verse}, nil
 }

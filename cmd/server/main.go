@@ -15,6 +15,10 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/bderrly/daily-soap/internal/server"
+
+	_ "time/tzdata"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 func main() {
@@ -69,7 +73,7 @@ func run() error {
 		close(idleConns)
 	}()
 
-	slog.Info("starting server", "addr", srv.Addr)
+	slog.Info("starting server", slog.String("addr", srv.Addr))
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("listen and serve: %w", err)
 	}

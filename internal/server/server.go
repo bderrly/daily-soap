@@ -13,15 +13,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	_ "time/tzdata"
 
 	"github.com/bderrly/daily-soap/internal/email"
 	"github.com/bderrly/daily-soap/internal/expunger"
 	"github.com/bderrly/daily-soap/internal/migrations"
 	"github.com/bderrly/daily-soap/internal/store"
 	"github.com/bderrly/daily-soap/internal/store/sqlite"
-
-	_ "github.com/mattn/go-sqlite3"
 )
 
 var (

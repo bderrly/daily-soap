@@ -23,9 +23,9 @@ func fetchPassagesWithCache(ctx context.Context, references []string) (esv.Respo
 		// Cache hit
 		if err := json.Unmarshal([]byte(content), &response); err != nil {
 			// If unmarshal fails, log it and fall back to fetch
-			slog.Error("failed to unmarshal cached ESV response", "error", err)
+			slog.Error("failed to unmarshal cached ESV response", slog.Any("error", err))
 		} else {
-			slog.Debug("cache hit for verses", "reference", key)
+			slog.Debug("cache hit for verses", slog.String("reference", key))
 			return response, nil
 		}
 	} else if !errors.Is(err, sql.ErrNoRows) {
