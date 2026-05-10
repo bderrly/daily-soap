@@ -26,42 +26,46 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get current date in YYYY-MM-DD format based on user location
-	loc, err := time.LoadLocation(user.Timezone)
-	if err != nil {
-		slog.Error("failed to load user location", "timezone", user.Timezone, "error", err)
-		loc = time.UTC
+	// Get date from query parameter, default to today
+	dateStr := r.URL.Query().Get("date")
+	if dateStr == "" {
+		// Get current date in YYYY-MM-DD format based on user location
+		loc, err := time.LoadLocation(user.Timezone)
+		if err != nil {
+			slog.Error("failed to load user location", "timezone", user.Timezone, "error", err)
+			loc = time.UTC
+		}
+		dateStr = time.Now().In(loc).Format(time.DateOnly)
 	}
-	today := time.Now().In(loc).Format(time.DateOnly)
 
-	// Get today's data (will load year file if needed)
-	dailyText, err := dailytexts.GetDailyText(today)
+	// Get data for the requested date (will load year file if needed)
+	dailyText, err := dailytexts.GetDailyText(dateStr)
 	if err != nil {
-		slog.Error("failed to get daily text", "date", today, "error", err)
-		http.Error(w, fmt.Sprintf("Error loading data for date: %s", today), http.StatusInternalServerError)
+		slog.Error("failed to get daily text", "date", dateStr, "error", err)
+		http.Error(w, fmt.Sprintf("Error loading data for date: %s", dateStr), http.StatusInternalServerError)
 		return
 	}
 
 	if dailyText == nil {
-		slog.Warn("no data found for date", "date", today)
-		http.Error(w, fmt.Sprintf("No data found for date: %s", today), http.StatusNotFound)
+		slog.Warn("no data found for date", "date", dateStr)
+		http.Error(w, fmt.Sprintf("No data found for date: %s", dateStr), http.StatusNotFound)
 		return
 	}
 
 	// Fetch verse content from ESV API (using cache)
 	verseContents, err := fetchPassagesWithCache(r.Context(), dailyText.Verses)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Error loading verses for %s", today), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Error loading verses for %s", dateStr), http.StatusInternalServerError)
 		return
 	}
 
 	// Load existing SOAP data from database
-	soapData, err := appStore.GetSOAPData(r.Context(), user.ID, today)
+	soapData, err := appStore.GetSOAPData(r.Context(), user.ID, dateStr)
 	if err != nil {
-		slog.Warn("failed to load SOAP data", "date", today, "error", err)
+		slog.Warn("failed to load SOAP data", "date", dateStr, "error", err)
 		// Continue with empty values if there's an error
 		soapData = &store.SOAPData{
-			Date:           today,
+			Date:           dateStr,
 			Observation:    "",
 			Application:    "",
 			Prayer:         "",
@@ -72,7 +76,7 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 	// Prepare template data
 	data := map[string]any{
 		"esvData":        verseContents,
-		"date":           today,
+		"date":           dateStr,
 		"observation":    soapData.Observation,
 		"application":    soapData.Application,
 		"prayer":         soapData.Prayer,
