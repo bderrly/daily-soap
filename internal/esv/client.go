@@ -86,5 +86,10 @@ func FetchPassages(ctx context.Context, references []string) (Response, error) {
 		apiResp.Passages[i] = processed
 	}
 
+	// Split passages that span multiple books. The ESV API merges cross-book
+	// ranges (e.g. "Leviticus 27:16–Numbers 1:16") into a single passage,
+	// omitting the second book's heading.
+	SplitCrossBookPassages(&apiResp)
+
 	return apiResp, nil
 }

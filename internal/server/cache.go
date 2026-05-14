@@ -26,6 +26,9 @@ func fetchPassagesWithCache(ctx context.Context, references []string) (esv.Respo
 			slog.Error("failed to unmarshal cached ESV response", slog.Any("error", err))
 		} else {
 			slog.Debug("cache hit for verses", slog.String("reference", key))
+			// Ensure cross-book passages are split (old cache entries may
+			// contain merged passages without the second book heading).
+			esv.SplitCrossBookPassages(&response)
 			return response, nil
 		}
 	} else if !errors.Is(err, sql.ErrNoRows) {
