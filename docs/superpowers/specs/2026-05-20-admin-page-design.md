@@ -46,10 +46,10 @@ A new Goose SQL migration (`internal/migrations/20260520000000_add_admin_and_dea
 * Define structs for holding metrics and user directory entries:
   ```go
   type AdminStats struct {
-      TotalUsers         int
-      CompletedWithin48h int
-      FailedWithin48h    int
-      ActiveLast7Days    int
+      TotalUsers                  int
+      ActiveLast7Days             int
+      EmailVerificationComplete   int
+      EmailVerificationIncomplete int
   }
 
   type AdminUserDirEntry struct {
@@ -58,7 +58,6 @@ A new Goose SQL migration (`internal/migrations/20260520000000_add_admin_and_dea
       IsVerified  bool
       CreatedAt   time.Time
       VerifiedAt  *time.Time
-      ActiveLast7 bool
   }
   ```
 * Add the following methods to `store.Store`:
@@ -72,13 +71,13 @@ A new Goose SQL migration (`internal/migrations/20260520000000_add_admin_and_dea
   ```sql
   SELECT COUNT(*) FROM users;
   ```
-* **Completed Registration within 48h**:
+* **Completed Registration within Deadline**:
   ```sql
   SELECT COUNT(*) FROM users
   WHERE is_verified = 1
     AND verified_at <= datetime(created_at, '+48 hours');
   ```
-* **Did Not Complete Registration within 48h** (Includes both unverified users whose 48-hour window has expired and verified users who verified late):
+* **Did Not Complete Registration within Deadline** (Includes both unverified users whose 48-hour window has expired and verified users who verified late):
   ```sql
   SELECT COUNT(*) FROM users
   WHERE (is_verified = 0 AND created_at < datetime(CURRENT_TIMESTAMP, '-48 hours'))
