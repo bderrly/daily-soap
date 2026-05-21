@@ -315,7 +315,8 @@ func (s *Store) QueueEmail(ctx context.Context, email *store.QueuedEmail) error 
 		INSERT INTO queued_emails (user_id, recipient, subject, body_html, status, attempts, last_attempt_at, next_attempt_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`
-	res, err := s.db.ExecContext(ctx, query,
+	res, err := s.db.ExecContext(
+		ctx, query,
 		email.UserID, email.Recipient, email.Subject, email.BodyHTML,
 		email.Status, email.Attempts, email.LastAttemptAt, email.NextAttemptAt,
 	)

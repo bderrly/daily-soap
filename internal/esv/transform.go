@@ -30,7 +30,6 @@ func processPassageHTML(htmlStr string) (string, error) {
 		Data:     "body",
 		DataAtom: atom.Body,
 	})
-
 	if err != nil {
 		return "", fmt.Errorf("failed to parse HTML fragment: %w", err)
 	}
