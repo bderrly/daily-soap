@@ -398,11 +398,98 @@ func (s *Store) MarkEmailSent(ctx context.Context, id int64) error {
 }
 
 // GetAdminStats retrieves user administration and metric statistics.
-func (s *Store) GetAdminStats(_ context.Context) (*store.AdminStats, error) {
-	return nil, nil
+func (s *Store) GetAdminStats(ctx context.Context) (*store.AdminStats, error) {
+	stats := &store.AdminStats{}
+
+	// Query total users
+	err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM users").Scan(&stats.TotalUsers)
+	if err != nil {
+		return nil, fmt.Errorf("getting total users: %w", err)
+	}
+
+	// Query completed within deadline (<= 48 hours)
+	queryCompleted := `
+		SELECT COUNT(*)
+		FROM users
+		WHERE verified_at IS NOT NULL
+		  AND (julianday(verified_at) - julianday(created_at)) <= 2.0
+	`
+	err = s.db.QueryRowContext(ctx, queryCompleted).Scan(&stats.CompletedWithinDeadline)
+	if err != nil {
+		return nil, fmt.Errorf("getting completed within deadline: %w", err)
+	}
+
+	// Query failed within deadline (> 48 hours or unverified and past 48 hours)
+	queryFailed := `
+		SELECT COUNT(*)
+		FROM users
+		WHERE (verified_at IS NOT NULL AND (julianday(verified_at) - julianday(created_at)) > 2.0)
+		   OR (verified_at IS NULL AND (julianday(CURRENT_TIMESTAMP) - julianday(created_at)) > 2.0)
+	`
+	err = s.db.QueryRowContext(ctx, queryFailed).Scan(&stats.FailedWithinDeadline)
+	if err != nil {
+		return nil, fmt.Errorf("getting failed within deadline: %w", err)
+	}
+
+	// Query active last 7 days from journal
+	queryActive := `
+		SELECT COUNT(DISTINCT user_id)
+		FROM journal
+		WHERE (julianday(CURRENT_TIMESTAMP) - julianday(timestamp)) <= 7.0
+	`
+	err = s.db.QueryRowContext(ctx, queryActive).Scan(&stats.ActiveLast7Days)
+	if err != nil {
+		return nil, fmt.Errorf("getting active last 7 days: %w", err)
+	}
+
+	return stats, nil
 }
 
 // GetAdminUserDirectory retrieves the list of users for the administrator directory.
-func (s *Store) GetAdminUserDirectory(_ context.Context) ([]*store.AdminUserDirEntry, error) {
-	return nil, nil
+func (s *Store) GetAdminUserDirectory(ctx context.Context) ([]*store.AdminUserDirEntry, error) {
+	query := `
+		SELECT
+			u.email,
+			u.is_admin,
+			u.is_verified,
+			u.created_at,
+			u.verified_at,
+			CASE
+				WHEN MAX(j.timestamp) IS NOT NULL AND (julianday(CURRENT_TIMESTAMP) - julianday(MAX(j.timestamp))) <= 7.0 THEN 1
+				ELSE 0
+			END as active_last_7
+		FROM users u
+		LEFT JOIN journal j ON u.id = j.user_id
+		GROUP BY u.id, u.email, u.is_admin, u.is_verified, u.created_at, u.verified_at
+		ORDER BY u.created_at DESC
+	`
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("querying admin user directory: %w", err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	var entries []*store.AdminUserDirEntry
+	for rows.Next() {
+		var entry store.AdminUserDirEntry
+		err := rows.Scan(
+			&entry.Email,
+			&entry.IsAdmin,
+			&entry.IsVerified,
+			&entry.CreatedAt,
+			&entry.VerifiedAt,
+			&entry.ActiveLast7,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("scanning admin user directory entry: %w", err)
+		}
+		entries = append(entries, &entry)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error admin user directory: %w", err)
+	}
+
+	return entries, nil
 }

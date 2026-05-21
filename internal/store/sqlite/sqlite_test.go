@@ -504,3 +504,112 @@ func TestStore_MarkEmailSent(t *testing.T) {
 		t.Error("expected last_attempt_at to be set")
 	}
 }
+
+func TestStore_AdminQueries(t *testing.T) {
+	db := setupTestDB(t)
+	s := New(db)
+	ctx := context.Background()
+
+	now := time.Now().UTC().Truncate(time.Second)
+
+	// Helper to insert user
+	insertUser := func(id int, email string, createdAt, verifiedAt *time.Time) {
+		cAt := now
+		if createdAt != nil {
+			cAt = *createdAt
+		}
+		var vAt interface{}
+		if verifiedAt != nil {
+			vAt = *verifiedAt
+		}
+
+		_, err := db.Exec(`INSERT INTO users (id, email, password_hash, is_verified, created_at, verified_at)
+			VALUES (?, ?, 'hash', 1, ?, ?)`, id, email, cAt.Format("2006-01-02 15:04:05"), vAt)
+		if err != nil {
+			t.Fatalf("failed to insert user %d: %v", id, err)
+		}
+	}
+
+	// Helper to insert journal
+	insertJournal := func(userId int, date string, ts *time.Time) {
+		tAt := now
+		if ts != nil {
+			tAt = *ts
+		}
+		_, err := db.Exec(`INSERT INTO journal (user_id, date, observation, application, prayer, timestamp)
+			VALUES (?, ?, 'o', 'a', 'p', ?)`, userId, date, tAt.Format("2006-01-02 15:04:05"))
+		if err != nil {
+			t.Fatalf("failed to insert journal for user %d: %v", userId, err)
+		}
+	}
+
+	// User 1: verified exactly 48h after creation (completed), active last 7 days
+	c1 := now.Add(-10 * 24 * time.Hour)
+	v1 := c1.Add(48 * time.Hour)
+	insertUser(1, "u1@example.com", &c1, &v1)
+	ts1 := now.Add(-3 * 24 * time.Hour) // active 3 days ago
+	insertJournal(1, "2026-05-01", &ts1)
+
+	// User 2: verified 48h + 1s after creation (failed), not active last 7 days
+	c2 := now.Add(-10 * 24 * time.Hour)
+	v2 := c2.Add(48*time.Hour + time.Second)
+	insertUser(2, "u2@example.com", &c2, &v2)
+	ts2 := now.Add(-8 * 24 * time.Hour) // active 8 days ago
+	insertJournal(2, "2026-05-01", &ts2)
+
+	// User 3: unverified and past 48h (failed), active last 7 days
+	c3 := now.Add(-3 * 24 * time.Hour)
+	insertUser(3, "u3@example.com", &c3, nil)
+	ts3 := now.Add(-1 * time.Hour) // active 1 hour ago
+	insertJournal(3, "2026-05-01", &ts3)
+
+	// User 4: unverified and within 48h (neither), not active
+	c4 := now.Add(-24 * time.Hour)
+	insertUser(4, "u4@example.com", &c4, nil)
+
+	// Test GetAdminStats
+	stats, err := s.GetAdminStats(ctx)
+	if err != nil {
+		t.Fatalf("GetAdminStats failed: %v", err)
+	}
+	if stats.TotalUsers != 4 {
+		t.Errorf("expected TotalUsers = 4, got %d", stats.TotalUsers)
+	}
+	if stats.CompletedWithinDeadline != 1 {
+		t.Errorf("expected CompletedWithinDeadline = 1, got %d", stats.CompletedWithinDeadline)
+	}
+	if stats.FailedWithinDeadline != 2 {
+		t.Errorf("expected FailedWithinDeadline = 2, got %d", stats.FailedWithinDeadline)
+	}
+	if stats.ActiveLast7Days != 2 {
+		t.Errorf("expected ActiveLast7Days = 2, got %d", stats.ActiveLast7Days)
+	}
+
+	// Test GetAdminUserDirectory
+	dir, err := s.GetAdminUserDirectory(ctx)
+	if err != nil {
+		t.Fatalf("GetAdminUserDirectory failed: %v", err)
+	}
+	if len(dir) != 4 {
+		t.Fatalf("expected 4 entries, got %d", len(dir))
+	}
+
+	// Should be ordered by creation date desc (User 4, User 3, User 1, User 2 (or 2 then 1))
+	if dir[0].Email != "u4@example.com" {
+		t.Errorf("expected first user to be u4, got %s", dir[0].Email)
+	}
+	if dir[1].Email != "u3@example.com" {
+		t.Errorf("expected second user to be u3, got %s", dir[1].Email)
+	}
+	// u1 and u2 have same creation date, order is non-deterministic or stable based on insert, let's just check activity
+
+	activeCount := 0
+	for _, entry := range dir {
+		if entry.ActiveLast7 {
+			activeCount++
+		}
+	}
+	if activeCount != 2 {
+		t.Errorf("expected 2 active users, got %d", activeCount)
+	}
+}
