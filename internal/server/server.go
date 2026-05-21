@@ -79,6 +79,7 @@ func Muxer() http.Handler {
 	mux.HandleFunc("/soap", authMiddleware(handleSOAP))
 	mux.HandleFunc("/export", authMiddleware(handleExport))
 	mux.HandleFunc("/history", authMiddleware(handleHistory))
+	mux.HandleFunc("/admin", authMiddleware(adminMiddleware(handleAdmin)))
 
 	// Create a subdirectory filesystem for the web directory
 	webFS, err := fs.Sub(web, "web")
