@@ -12,6 +12,9 @@ type User struct {
 	Email      string
 	IsVerified bool
 	Timezone   string
+	IsAdmin    bool
+	CreatedAt  time.Time
+	VerifiedAt *time.Time
 }
 
 // QueuedEmail represents an email message in the delivery queue.
@@ -34,6 +37,24 @@ type SOAPData struct {
 	Application    string   `json:"application"`
 	Prayer         string   `json:"prayer"`
 	SelectedVerses []string `json:"selectedVerses"`
+}
+
+// AdminStats contains aggregated metrics for user administration.
+type AdminStats struct {
+	TotalUsers              int
+	CompletedWithinDeadline int
+	FailedWithinDeadline    int
+	ActiveLast7Days         int
+}
+
+// AdminUserDirEntry represents a user record tailored for the administration directory.
+type AdminUserDirEntry struct {
+	Email       string
+	IsAdmin     bool
+	IsVerified  bool
+	CreatedAt   time.Time
+	VerifiedAt  *time.Time
+	ActiveLast7 bool
 }
 
 // Store defines the interface for database operations.
@@ -61,4 +82,8 @@ type Store interface {
 	UpdateUserPasswordHash(ctx context.Context, userID int64, newHash string) error
 	UpdateUserTimezone(ctx context.Context, userID int64, timezone string) error
 	GetSOAPDataRange(ctx context.Context, userID int64, startDate string, endDate string) ([]*SOAPData, error)
+	// GetAdminStats retrieves user administration and metric statistics.
+	GetAdminStats(ctx context.Context) (*AdminStats, error)
+	// GetAdminUserDirectory retrieves the list of users for the administrator directory.
+	GetAdminUserDirectory(ctx context.Context) ([]*AdminUserDirEntry, error)
 }

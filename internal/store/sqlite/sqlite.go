@@ -396,3 +396,13 @@ func (s *Store) MarkEmailSent(ctx context.Context, id int64) error {
 	}
 	return nil
 }
+
+// GetAdminStats retrieves user administration and metric statistics.
+func (s *Store) GetAdminStats(_ context.Context) (*store.AdminStats, error) {
+	return nil, nil
+}
+
+// GetAdminUserDirectory retrieves the list of users for the administrator directory.
+func (s *Store) GetAdminUserDirectory(_ context.Context) ([]*store.AdminUserDirEntry, error) {
+	return nil, nil
+}

@@ -24,7 +24,10 @@ func setupTestDB(t *testing.T) *sql.DB {
 		password_hash TEXT NOT NULL,
 		is_verified INTEGER DEFAULT 0,
 		verification_token TEXT,
-		timezone TEXT NOT NULL DEFAULT 'UTC'
+		timezone TEXT NOT NULL DEFAULT 'UTC',
+		is_admin INTEGER DEFAULT 0 NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+		verified_at DATETIME
 	);
 	CREATE TABLE sessions (
 		token TEXT PRIMARY KEY,
