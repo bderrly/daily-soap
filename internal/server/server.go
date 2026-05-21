@@ -119,7 +119,7 @@ func csrfMiddleware(next http.Handler) http.Handler {
 				Value:    token,
 				Path:     "/",
 				HttpOnly: true,
-				Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+				Secure:   true,
 				SameSite: http.SameSiteLaxMode,
 			})
 		} else {
@@ -166,7 +166,7 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 				Path:     "/",
 				MaxAge:   -1,
 				HttpOnly: true,
-				Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+				Secure:   true,
 				SameSite: http.SameSiteLaxMode,
 			})
 			if r.URL.Path == "/" {
