@@ -5,8 +5,10 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"time"
 
 	"github.com/bderrly/daily-soap/internal/store"
@@ -159,14 +161,23 @@ func (s *Store) UpdateUserTimezone(ctx context.Context, userID int64, timezone s
 func (s *Store) ConfirmUser(ctx context.Context, token string) (int64, string, error) {
 	var userID int64
 	var email string
-	query := "UPDATE users SET is_verified = 1, verification_token = NULL WHERE verification_token = ? RETURNING id, email"
+	query := "UPDATE users SET is_verified = 1, verification_token = NULL, verified_at = CURRENT_TIMESTAMP WHERE verification_token = ? RETURNING id, email"
 	err := s.db.QueryRowContext(ctx, query, token).Scan(&userID, &email)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return 0, "", nil
 		}
 		return 0, "", fmt.Errorf("verifying user: %w", err)
 	}
+
+	adminEmail := os.Getenv("ADMIN_EMAIL")
+	if adminEmail != "" && email == adminEmail {
+		_, err = s.db.ExecContext(ctx, "UPDATE users SET is_admin = 1 WHERE id = ?", userID)
+		if err != nil {
+			return 0, "", fmt.Errorf("promoting user to admin: %w", err)
+		}
+	}
+
 	return userID, email, nil
 }
 

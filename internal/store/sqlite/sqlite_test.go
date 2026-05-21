@@ -350,17 +350,58 @@ func TestStore_ConfirmUser(t *testing.T) {
 	s := New(db)
 	ctx := context.Background()
 
-	_, _ = db.Exec("INSERT INTO users (id, email, password_hash, verification_token) VALUES (1, 'c@example.com', 'h', 'token123')")
-	userID, email, err := s.ConfirmUser(ctx, "token123")
-	if err != nil {
-		t.Errorf("expected no error, got %v", err)
-	}
-	if userID != 1 {
-		t.Errorf("expected userID 1, got %d", userID)
-	}
-	if email != "c@example.com" {
-		t.Errorf("expected email c@example.com, got %s", email)
-	}
+	t.Run("Standard User", func(t *testing.T) {
+		_, _ = db.Exec("INSERT INTO users (id, email, password_hash, verification_token) VALUES (1, 'c@example.com', 'h', 'token123')")
+		userID, email, err := s.ConfirmUser(ctx, "token123")
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
+		if userID != 1 {
+			t.Errorf("expected userID 1, got %d", userID)
+		}
+		if email != "c@example.com" {
+			t.Errorf("expected email c@example.com, got %s", email)
+		}
+
+		var verifiedAt sql.NullTime
+		var isAdmin int
+		err = db.QueryRow("SELECT verified_at, is_admin FROM users WHERE id = 1").Scan(&verifiedAt, &isAdmin)
+		if err != nil {
+			t.Fatalf("failed to query user: %v", err)
+		}
+		if !verifiedAt.Valid {
+			t.Error("expected verified_at to be set, got null")
+		}
+		if isAdmin != 0 {
+			t.Errorf("expected is_admin 0, got %d", isAdmin)
+		}
+	})
+
+	t.Run("Admin User", func(t *testing.T) {
+		adminEmail := "admin@example.com"
+		t.Setenv("ADMIN_EMAIL", adminEmail)
+
+		_, _ = db.Exec("INSERT INTO users (id, email, password_hash, verification_token) VALUES (2, ?, 'h', 'admin_token')", adminEmail)
+		userID, email, err := s.ConfirmUser(ctx, "admin_token")
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
+		if userID != 2 {
+			t.Errorf("expected userID 2, got %d", userID)
+		}
+		if email != adminEmail {
+			t.Errorf("expected email %s, got %s", adminEmail, email)
+		}
+
+		var isAdmin int
+		err = db.QueryRow("SELECT is_admin FROM users WHERE id = 2").Scan(&isAdmin)
+		if err != nil {
+			t.Fatalf("failed to query user: %v", err)
+		}
+		if isAdmin != 1 {
+			t.Errorf("expected is_admin 1, got %d", isAdmin)
+		}
+	})
 }
 
 func TestStore_ESVCache(t *testing.T) {
