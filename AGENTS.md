@@ -8,3 +8,4 @@
 - Prioritize standard library packages rather than custom code.
 - Always run `gofumpt` and `golangci-lint run` any time you modify or create any .go files.
 - Use "_test" packages whenever possible when writing unit tests.
+- This project uses `mise` to manage project-specific tools. Run tools from mise.toml files with `mise exec`.

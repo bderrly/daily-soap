@@ -1,10 +1,319 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>Admin Area - Moravian Texts + SOAP</title>
+    {{ template "head.gotmpl" . }}
+    <title>Admin Dashboard</title>
+    <style nonce="{{.nonce}}">
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        :root {
+            --admin-bg: #f8fafc;
+            --admin-card-bg: rgba(255, 255, 255, 0.9);
+            --admin-text-main: #1e293b;
+            --admin-text-muted: #64748b;
+            --admin-border: rgba(226, 232, 240, 0.8);
+            --admin-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+            --admin-hover-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
+            --metric-1: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+            --metric-2: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            --metric-3: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            --metric-4: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%);
+        }
+
+        body {
+            background-color: var(--admin-bg);
+            background-image:
+                radial-gradient(at 40% 20%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+                radial-gradient(at 80% 0%, rgba(16, 185, 129, 0.15) 0px, transparent 50%),
+                radial-gradient(at 0% 50%, rgba(244, 63, 94, 0.15) 0px, transparent 50%);
+            background-attachment: fixed;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            color: var(--admin-text-main);
+            margin: 0;
+        }
+
+        .admin-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2.5rem;
+        }
+
+        .dashboard-title {
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: -0.025em;
+            background: linear-gradient(to right, #1e293b, #475569);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin: 0;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }
+
+        .metric-card {
+            background: var(--admin-card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: var(--admin-shadow);
+            border: 1px solid var(--admin-border);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+        }
+
+        .metric-card.total::before { background: var(--metric-1); }
+        .metric-card.active::before { background: var(--metric-2); }
+        .metric-card.verified::before { background: var(--metric-3); }
+        .metric-card.failed::before { background: var(--metric-4); }
+
+        .metric-card:hover {
+            transform: translateY(-5px) scale(1.02);
+            box-shadow: var(--admin-hover-shadow);
+        }
+
+        .metric-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--admin-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--admin-text-main);
+            line-height: 1.2;
+        }
+
+        .table-container {
+            background: var(--admin-card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 1rem;
+            box-shadow: var(--admin-shadow);
+            border: 1px solid var(--admin-border);
+            overflow: hidden;
+            animation: fadeIn 0.8s ease-out;
+        }
+
+        .table-header-title {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--admin-border);
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .directory-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        .directory-table th {
+            background-color: rgba(248, 250, 252, 0.5);
+            padding: 1rem 1.5rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--admin-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid var(--admin-border);
+        }
+
+        .directory-table td {
+            padding: 1rem 1.5rem;
+            font-size: 0.875rem;
+            border-bottom: 1px solid var(--admin-border);
+            color: var(--admin-text-main);
+            transition: background-color 0.2s ease;
+        }
+
+        .directory-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .directory-table tbody tr:hover td {
+            background-color: rgba(241, 245, 249, 0.6);
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            line-height: 1;
+        }
+
+        .badge-admin {
+            background-color: #ede9fe;
+            color: #7c3aed;
+        }
+
+        .badge-user {
+            background-color: #f1f5f9;
+            color: #64748b;
+        }
+
+        .badge-verified {
+            background-color: #d1fae5;
+            color: #059669;
+        }
+
+        .badge-unverified {
+            background-color: #fee2e2;
+            color: #dc2626;
+        }
+
+        .badge-active {
+            background-color: #e0f2fe;
+            color: #0284c7;
+            border: 1px solid #bae6fd;
+        }
+
+        .badge-inactive {
+            background-color: #f3f4f6;
+            color: #9ca3af;
+        }
+
+        .date-text {
+            color: var(--admin-text-muted);
+            font-variant-numeric: tabular-nums;
+        }
+    </style>
 </head>
 <body>
-    <h1>Admin Area</h1>
-    <p>Total Users: {{.Stats.TotalUsers}}</p>
+    <div class="container" style="max-width: 100%; padding: 0;">
+        <div class="header-controls" style="padding: 1rem 2rem; background: rgba(255,255,255,0.8); backdrop-filter: blur(10px); border-bottom: 1px solid var(--admin-border); max-width: 1200px; margin: 0 auto; border-radius: 0 0 1rem 1rem;">
+            <div class="header-brand">
+                <a href="/"><img src="/web/bible.svg" class="logo" alt="Bible Logo"></a>
+                <h1 class="header-title" style="font-family: 'Inter', sans-serif;">Daily Reading + SOAP</h1>
+            </div>
+            <div style="font-family: 'Inter', sans-serif;">
+                <a href="/" class="history-btn" style="margin-right: 15px; text-decoration: none; color: #4a5568; font-weight: 500;">Back to Today</a>
+                <a href="/history" class="history-btn" style="margin-right: 15px; text-decoration: none; color: #4a5568; font-weight: 500;">History</a>
+                <span class="user-email" style="margin-right: 15px;">{{.user.Email}}</span>
+                <a href="/logout" class="logout-btn">Sign Out</a>
+            </div>
+        </div>
+
+        <div class="admin-container">
+            <div class="dashboard-header">
+                <h2 class="dashboard-title">Admin Dashboard</h2>
+            </div>
+
+            <div class="metrics-grid">
+                <div class="metric-card total">
+                    <div class="metric-title">Total Users</div>
+                    <div class="metric-value">{{.stats.TotalUsers}}</div>
+                </div>
+                <div class="metric-card active">
+                    <div class="metric-title">Active (7 Days)</div>
+                    <div class="metric-value">{{.stats.ActiveLast7Days}}</div>
+                </div>
+                <div class="metric-card verified">
+                    <div class="metric-title">Verified Within 48h</div>
+                    <div class="metric-value">{{.stats.CompletedWithinDeadline}}</div>
+                </div>
+                <div class="metric-card failed">
+                    <div class="metric-title">Failed / Unverified</div>
+                    <div class="metric-value">{{.stats.FailedWithinDeadline}}</div>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <div class="table-header-title">User Directory</div>
+                <div style="overflow-x: auto;">
+                    <table class="directory-table">
+                        <thead>
+                            <tr>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Status</th>
+                                <th>Created</th>
+                                <th>Verified</th>
+                                <th>Activity</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{range .directory}}
+                            <tr>
+                                <td style="font-weight: 500;">{{.Email}}</td>
+                                <td>
+                                    {{if .IsAdmin}}
+                                    <span class="badge badge-admin">Admin</span>
+                                    {{else}}
+                                    <span class="badge badge-user">User</span>
+                                    {{end}}
+                                </td>
+                                <td>
+                                    {{if .IsVerified}}
+                                    <span class="badge badge-verified">Verified</span>
+                                    {{else}}
+                                    <span class="badge badge-unverified">Unverified</span>
+                                    {{end}}
+                                </td>
+                                <td class="date-text">{{.CreatedAt.Format "Jan 02, 2006"}}</td>
+                                <td class="date-text">
+                                    {{if .VerifiedAt}}
+                                        {{.VerifiedAt.Format "Jan 02, 2006"}}
+                                    {{else}}
+                                        <span style="color: #cbd5e1;">-</span>
+                                    {{end}}
+                                </td>
+                                <td>
+                                    {{if .ActiveLast7}}
+                                    <span class="badge badge-active">Active</span>
+                                    {{else}}
+                                    <span class="badge badge-inactive">Inactive</span>
+                                    {{end}}
+                                </td>
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div style="max-width: 1200px; margin: 0 auto;">
+            {{ template "footer.gotmpl" . }}
+        </div>
+    </div>
 </body>
 </html>

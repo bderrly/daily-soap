@@ -15,6 +15,9 @@
             </div>
             <div>
                 <a href="/history" class="history-btn" style="margin-right: 15px; text-decoration: none; color: #4a5568; font-weight: 500;">History</a>
+                {{if .user.IsAdmin}}
+                <a href="/admin" style="margin-right: 15px; text-decoration: none; color: #4a5568; font-weight: 500;">Admin</a>
+                {{end}}
                 <span class="user-email">{{.user.Email}}</span>
                 <a href="/logout" class="logout-btn">Sign Out</a>
             </div>

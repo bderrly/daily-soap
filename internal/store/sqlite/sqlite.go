@@ -28,16 +28,20 @@ func New(db *sql.DB) *Store {
 func (s *Store) GetUserFromSession(ctx context.Context, token string) (*store.User, error) {
 	var user store.User
 	var expiresAt time.Time
+	var verifiedAt sql.NullTime
 
 	query := `
-		SELECT u.id, u.email, u.is_verified, u.timezone, s.expires_at
+		SELECT u.id, u.email, u.is_verified, u.timezone, u.is_admin, u.created_at, u.verified_at, s.expires_at
 		FROM sessions s
 		JOIN users u ON s.user_id = u.id
 		WHERE s.token = ?`
 
-	err := s.db.QueryRowContext(ctx, query, token).Scan(&user.ID, &user.Email, &user.IsVerified, &user.Timezone, &expiresAt)
+	err := s.db.QueryRowContext(ctx, query, token).Scan(&user.ID, &user.Email, &user.IsVerified, &user.Timezone, &user.IsAdmin, &user.CreatedAt, &verifiedAt, &expiresAt)
 	if err != nil {
 		return nil, fmt.Errorf("getting user from session: %w", err)
+	}
+	if verifiedAt.Valid {
+		user.VerifiedAt = &verifiedAt.Time
 	}
 
 	if time.Now().After(expiresAt) {
@@ -184,9 +188,13 @@ func (s *Store) ConfirmUser(ctx context.Context, token string) (int64, string, e
 // GetUserByEmail retrieves a user by their email.
 func (s *Store) GetUserByEmail(ctx context.Context, email string) (*store.User, error) {
 	var user store.User
-	err := s.db.QueryRowContext(ctx, "SELECT id, email, is_verified, timezone FROM users WHERE email = ?", email).Scan(&user.ID, &user.Email, &user.IsVerified, &user.Timezone)
+	var verifiedAt sql.NullTime
+	err := s.db.QueryRowContext(ctx, "SELECT id, email, is_verified, timezone, is_admin, created_at, verified_at FROM users WHERE email = ?", email).Scan(&user.ID, &user.Email, &user.IsVerified, &user.Timezone, &user.IsAdmin, &user.CreatedAt, &verifiedAt)
 	if err != nil {
 		return nil, fmt.Errorf("getting user by email: %w", err)
+	}
+	if verifiedAt.Valid {
+		user.VerifiedAt = &verifiedAt.Time
 	}
 	return &user, nil
 }
@@ -485,16 +493,20 @@ func (s *Store) GetAdminUserDirectory(ctx context.Context) ([]*store.AdminUserDi
 	var entries []*store.AdminUserDirEntry
 	for rows.Next() {
 		var entry store.AdminUserDirEntry
+		var verifiedAt sql.NullTime
 		err := rows.Scan(
 			&entry.Email,
 			&entry.IsAdmin,
 			&entry.IsVerified,
 			&entry.CreatedAt,
-			&entry.VerifiedAt,
+			&verifiedAt,
 			&entry.ActiveLast7,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scanning admin user directory entry: %w", err)
+		}
+		if verifiedAt.Valid {
+			entry.VerifiedAt = &verifiedAt.Time
 		}
 		entries = append(entries, &entry)
 	}

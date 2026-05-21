@@ -2,3 +2,15 @@
 go = "1.25"
 gofumpt = "latest"
 golangci-lint = "latest"
+
+[tasks.gofumpt]
+description = "Format Go code using gofumpt"
+run = "gofumpt -w ."
+
+[tasks.lint]
+description = "Lint Go code using golangci-lint"
+run = "golangci-lint run"
+
+[tasks.check]
+description = "Run all formatting and linting tasks"
+depends = ["gofumpt", "lint"]
