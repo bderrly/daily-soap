@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/bderrly/daily-soap/internal/store"
@@ -175,7 +176,7 @@ func (s *Store) ConfirmUser(ctx context.Context, token string) (int64, string, e
 	}
 
 	adminEmail := os.Getenv("ADMIN_EMAIL")
-	if adminEmail != "" && email == adminEmail {
+	if adminEmail != "" && strings.EqualFold(email, adminEmail) {
 		_, err = s.db.ExecContext(ctx, "UPDATE users SET is_admin = 1 WHERE id = ?", userID)
 		if err != nil {
 			return 0, "", fmt.Errorf("promoting user to admin: %w", err)

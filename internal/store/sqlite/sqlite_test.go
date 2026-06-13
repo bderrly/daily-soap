@@ -401,6 +401,35 @@ func TestStore_ConfirmUser(t *testing.T) {
 			t.Errorf("expected is_admin 1, got %d", isAdmin)
 		}
 	})
+
+	t.Run("Admin User Case Insensitive", func(t *testing.T) {
+		adminEmail := "Admin-CI@Example.com"
+		t.Setenv("ADMIN_EMAIL", adminEmail)
+
+		_, err := db.Exec("INSERT INTO users (id, email, password_hash, verification_token) VALUES (3, 'admin-ci@example.com', 'h', 'admin_token_ci')")
+		if err != nil {
+			t.Fatalf("failed to insert: %v", err)
+		}
+		userID, email, err := s.ConfirmUser(ctx, "admin_token_ci")
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
+		if userID != 3 {
+			t.Errorf("expected userID 3, got %d", userID)
+		}
+		if email != "admin-ci@example.com" {
+			t.Errorf("expected email admin-ci@example.com, got %s", email)
+		}
+
+		var isAdmin int
+		err = db.QueryRow("SELECT is_admin FROM users WHERE id = 3").Scan(&isAdmin)
+		if err != nil {
+			t.Fatalf("failed to query user: %v", err)
+		}
+		if isAdmin != 1 {
+			t.Errorf("expected is_admin 1, got %d", isAdmin)
+		}
+	})
 }
 
 func TestStore_ESVCache(t *testing.T) {
