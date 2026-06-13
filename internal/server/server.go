@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 
 	"github.com/bderrly/daily-soap/internal/email"
 	"github.com/bderrly/daily-soap/internal/expunger"
@@ -216,12 +217,16 @@ func InitDB(ctx context.Context) error {
 	appStore = sqlite.New(db)
 
 	// Promote existing user matching ADMIN_EMAIL to admin if configured
-	adminEmail := os.Getenv("ADMIN_EMAIL")
+	adminEmail := strings.TrimSpace(os.Getenv("ADMIN_EMAIL"))
 	if adminEmail != "" {
-		if err := appStore.PromoteUserToAdmin(ctx, adminEmail); err != nil {
-			slog.Error("failed to promote admin user", "error", err, "admin_email", adminEmail)
+		rows, err := appStore.PromoteUserToAdmin(ctx, adminEmail)
+		if err != nil {
+			return fmt.Errorf("failed to promote admin user %q: %w", adminEmail, err)
+		}
+		if rows > 0 {
+			slog.Info("successfully promoted existing user to admin", "admin_email", adminEmail)
 		} else {
-			slog.Info("checked and promoted admin user", "admin_email", adminEmail)
+			slog.Info("checked admin user; no promotion needed (user not found or already admin)", "admin_email", adminEmail)
 		}
 	}
 

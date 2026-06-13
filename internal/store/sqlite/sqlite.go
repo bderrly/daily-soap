@@ -519,10 +519,14 @@ func (s *Store) GetAdminUserDirectory(ctx context.Context) ([]*store.AdminUserDi
 }
 
 // PromoteUserToAdmin upgrades a user to the admin role by email.
-func (s *Store) PromoteUserToAdmin(ctx context.Context, email string) error {
-	_, err := s.db.ExecContext(ctx, "UPDATE users SET is_admin = 1 WHERE LOWER(email) = LOWER(?)", email)
+func (s *Store) PromoteUserToAdmin(ctx context.Context, email string) (int64, error) {
+	res, err := s.db.ExecContext(ctx, "UPDATE users SET is_admin = 1 WHERE LOWER(email) = LOWER(?)", email)
 	if err != nil {
-		return fmt.Errorf("promoting user to admin: %w", err)
+		return 0, fmt.Errorf("promoting user to admin: %w", err)
 	}
-	return nil
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("getting rows affected: %w", err)
+	}
+	return rows, nil
 }

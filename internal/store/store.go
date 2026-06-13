@@ -95,5 +95,5 @@ type Store interface {
 	// GetAdminUserDirectory retrieves the list of users for the administrator directory.
 	GetAdminUserDirectory(ctx context.Context) ([]*AdminUserDirEntry, error)
 	// PromoteUserToAdmin upgrades a user to the admin role by email.
-	PromoteUserToAdmin(ctx context.Context, email string) error
+	PromoteUserToAdmin(ctx context.Context, email string) (int64, error)
 }

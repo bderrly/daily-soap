@@ -695,9 +695,12 @@ func TestStore_PromoteUserToAdmin(t *testing.T) {
 	}
 
 	// Promote with case-insensitive email
-	err = s.PromoteUserToAdmin(ctx, "EXISTING-user@EXAMPLE.com")
+	rows, err := s.PromoteUserToAdmin(ctx, "EXISTING-user@EXAMPLE.com")
 	if err != nil {
 		t.Fatalf("failed to promote user: %v", err)
+	}
+	if rows != 1 {
+		t.Errorf("expected 1 row affected, got %d", rows)
 	}
 
 	// Verify is_admin is 1
@@ -708,5 +711,14 @@ func TestStore_PromoteUserToAdmin(t *testing.T) {
 	}
 	if isAdmin != 1 {
 		t.Errorf("expected is_admin 1, got %d", isAdmin)
+	}
+
+	// Try promoting non-existent email
+	rows, err = s.PromoteUserToAdmin(ctx, "nonexistent@example.com")
+	if err != nil {
+		t.Fatalf("failed to promote non-existent user: %v", err)
+	}
+	if rows != 0 {
+		t.Errorf("expected 0 rows affected for non-existent user, got %d", rows)
 	}
 }
