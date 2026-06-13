@@ -22,7 +22,6 @@ func setupTestDB(t *testing.T) *sql.DB {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		email TEXT UNIQUE NOT NULL,
 		password_hash TEXT NOT NULL,
-		is_verified INTEGER DEFAULT 0,
 		verification_token TEXT,
 		timezone TEXT NOT NULL DEFAULT 'UTC',
 		is_admin INTEGER DEFAULT 0 NOT NULL,
@@ -85,7 +84,7 @@ func TestStore_GetUserFromSession(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup: Create a user and a session
-	_, err := db.Exec("INSERT INTO users (id, email, password_hash, is_verified, timezone) VALUES (1, 'test@example.com', 'hash', 1, 'UTC')")
+	_, err := db.Exec("INSERT INTO users (id, email, password_hash, timezone, verified_at) VALUES (1, 'test@example.com', 'hash', 'UTC', CURRENT_TIMESTAMP)")
 	if err != nil {
 		t.Fatalf("failed to insert user: %v", err)
 	}
@@ -129,7 +128,7 @@ func TestStore_GetSOAPData(t *testing.T) {
 	s := New(db)
 	ctx := context.Background()
 
-	_, err := db.Exec("INSERT INTO users (id, email, password_hash, is_verified) VALUES (1, 'test@example.com', 'hash', 1)")
+	_, err := db.Exec("INSERT INTO users (id, email, password_hash, verified_at) VALUES (1, 'test@example.com', 'hash', CURRENT_TIMESTAMP)")
 	if err != nil {
 		t.Fatalf("failed to insert user: %v", err)
 	}
@@ -168,7 +167,7 @@ func TestStore_SaveSOAPData(t *testing.T) {
 	s := New(db)
 	ctx := context.Background()
 
-	_, err := db.Exec("INSERT INTO users (id, email, password_hash, is_verified) VALUES (1, 'test@example.com', 'hash', 1)")
+	_, err := db.Exec("INSERT INTO users (id, email, password_hash, verified_at) VALUES (1, 'test@example.com', 'hash', CURRENT_TIMESTAMP)")
 	if err != nil {
 		t.Fatalf("failed to insert user: %v", err)
 	}
@@ -564,8 +563,8 @@ func TestStore_AdminQueries(t *testing.T) {
 			vAt = *verifiedAt
 		}
 
-		_, err := db.Exec(`INSERT INTO users (id, email, password_hash, is_verified, created_at, verified_at)
-			VALUES (?, ?, 'hash', 1, ?, ?)`, id, email, cAt.Format("2006-01-02 15:04:05"), vAt)
+		_, err := db.Exec(`INSERT INTO users (id, email, password_hash, created_at, verified_at)
+			VALUES (?, ?, 'hash', ?, ?)`, id, email, cAt.Format("2006-01-02 15:04:05"), vAt)
 		if err != nil {
 			t.Fatalf("failed to insert user %d: %v", id, err)
 		}

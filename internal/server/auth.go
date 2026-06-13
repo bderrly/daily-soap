@@ -62,7 +62,7 @@ func authenticateUser(ctx context.Context, email, password string) (*store.User,
 		return nil, fmt.Errorf("email not verified")
 	}
 
-	return &store.User{ID: id, Email: email, IsVerified: isVerified, Timezone: timezone}, nil
+	return &store.User{ID: id, Email: email, Timezone: timezone}, nil
 }
 
 func createSession(ctx context.Context, userID int64) (string, error) {

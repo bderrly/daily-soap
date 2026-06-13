@@ -10,11 +10,15 @@ import (
 type User struct {
 	ID         int64
 	Email      string
-	IsVerified bool
 	Timezone   string
 	IsAdmin    bool
 	CreatedAt  time.Time
 	VerifiedAt *time.Time
+}
+
+// IsVerified returns true if the user's email has been verified.
+func (u *User) IsVerified() bool {
+	return u.VerifiedAt != nil
 }
 
 // QueuedEmail represents an email message in the delivery queue.
@@ -51,10 +55,14 @@ type AdminStats struct {
 type AdminUserDirEntry struct {
 	Email       string
 	IsAdmin     bool
-	IsVerified  bool
 	CreatedAt   time.Time
 	VerifiedAt  *time.Time
 	ActiveLast7 bool
+}
+
+// IsVerified returns true if the user's email has been verified.
+func (e *AdminUserDirEntry) IsVerified() bool {
+	return e.VerifiedAt != nil
 }
 
 // Store defines the interface for database operations.

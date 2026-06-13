@@ -31,12 +31,12 @@ func (s *Store) GetUserFromSession(ctx context.Context, token string) (*store.Us
 	var verifiedAt sql.NullTime
 
 	query := `
-		SELECT u.id, u.email, u.is_verified, u.timezone, u.is_admin, u.created_at, u.verified_at, s.expires_at
+		SELECT u.id, u.email, u.timezone, u.is_admin, u.created_at, u.verified_at, s.expires_at
 		FROM sessions s
 		JOIN users u ON s.user_id = u.id
 		WHERE s.token = ?`
 
-	err := s.db.QueryRowContext(ctx, query, token).Scan(&user.ID, &user.Email, &user.IsVerified, &user.Timezone, &user.IsAdmin, &user.CreatedAt, &verifiedAt, &expiresAt)
+	err := s.db.QueryRowContext(ctx, query, token).Scan(&user.ID, &user.Email, &user.Timezone, &user.IsAdmin, &user.CreatedAt, &verifiedAt, &expiresAt)
 	if err != nil {
 		return nil, fmt.Errorf("getting user from session: %w", err)
 	}
@@ -145,7 +145,7 @@ func (s *Store) CreateUser(ctx context.Context, email, passwordHash, token, time
 		timezone = "UTC"
 	}
 
-	_, err := s.db.ExecContext(ctx, "INSERT INTO users (email, password_hash, is_verified, verification_token, timezone) VALUES (?, ?, 0, ?, ?)", email, passwordHash, token, timezone)
+	_, err := s.db.ExecContext(ctx, "INSERT INTO users (email, password_hash, verification_token, timezone) VALUES (?, ?, ?, ?)", email, passwordHash, token, timezone)
 	if err != nil {
 		return fmt.Errorf("inserting user %q: %w", email, err)
 	}
@@ -165,7 +165,7 @@ func (s *Store) UpdateUserTimezone(ctx context.Context, userID int64, timezone s
 func (s *Store) ConfirmUser(ctx context.Context, token string) (int64, string, error) {
 	var userID int64
 	var email string
-	query := "UPDATE users SET is_verified = 1, verification_token = NULL, verified_at = CURRENT_TIMESTAMP WHERE verification_token = ? RETURNING id, email"
+	query := "UPDATE users SET verification_token = NULL, verified_at = CURRENT_TIMESTAMP WHERE verification_token = ? RETURNING id, email"
 	err := s.db.QueryRowContext(ctx, query, token).Scan(&userID, &email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -189,7 +189,7 @@ func (s *Store) ConfirmUser(ctx context.Context, token string) (int64, string, e
 func (s *Store) GetUserByEmail(ctx context.Context, email string) (*store.User, error) {
 	var user store.User
 	var verifiedAt sql.NullTime
-	err := s.db.QueryRowContext(ctx, "SELECT id, email, is_verified, timezone, is_admin, created_at, verified_at FROM users WHERE email = ?", email).Scan(&user.ID, &user.Email, &user.IsVerified, &user.Timezone, &user.IsAdmin, &user.CreatedAt, &verifiedAt)
+	err := s.db.QueryRowContext(ctx, "SELECT id, email, timezone, is_admin, created_at, verified_at FROM users WHERE email = ?", email).Scan(&user.ID, &user.Email, &user.Timezone, &user.IsAdmin, &user.CreatedAt, &verifiedAt)
 	if err != nil {
 		return nil, fmt.Errorf("getting user by email: %w", err)
 	}
@@ -237,7 +237,7 @@ func (s *Store) DeletePasswordResetToken(ctx context.Context, token string) erro
 
 // GetAuthUser retrieves authentication-related information for a user.
 func (s *Store) GetAuthUser(ctx context.Context, email string) (userID int64, passwordHash string, isVerified bool, timezone string, err error) {
-	err = s.db.QueryRowContext(ctx, "SELECT id, password_hash, is_verified, timezone FROM users WHERE email = ?", email).Scan(&userID, &passwordHash, &isVerified, &timezone)
+	err = s.db.QueryRowContext(ctx, "SELECT id, password_hash, (verified_at IS NOT NULL) AS is_verified, timezone FROM users WHERE email = ?", email).Scan(&userID, &passwordHash, &isVerified, &timezone)
 	if err != nil {
 		return 0, "", false, "", fmt.Errorf("getting auth user: %w", err)
 	}
@@ -470,7 +470,6 @@ func (s *Store) GetAdminUserDirectory(ctx context.Context) ([]*store.AdminUserDi
 		SELECT
 			u.email,
 			u.is_admin,
-			u.is_verified,
 			u.created_at,
 			u.verified_at,
 			CASE
@@ -479,7 +478,7 @@ func (s *Store) GetAdminUserDirectory(ctx context.Context) ([]*store.AdminUserDi
 			END as active_last_7
 		FROM users u
 		LEFT JOIN journal j ON u.id = j.user_id
-		GROUP BY u.id, u.email, u.is_admin, u.is_verified, u.created_at, u.verified_at
+		GROUP BY u.id, u.email, u.is_admin, u.created_at, u.verified_at
 		ORDER BY u.created_at DESC
 	`
 	rows, err := s.db.QueryContext(ctx, query)
@@ -497,7 +496,6 @@ func (s *Store) GetAdminUserDirectory(ctx context.Context) ([]*store.AdminUserDi
 		err := rows.Scan(
 			&entry.Email,
 			&entry.IsAdmin,
-			&entry.IsVerified,
 			&entry.CreatedAt,
 			&verifiedAt,
 			&entry.ActiveLast7,
