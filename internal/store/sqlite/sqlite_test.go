@@ -682,3 +682,31 @@ func TestStore_AdminQueries(t *testing.T) {
 		t.Errorf("expected 2 active users, got %d", activeCount)
 	}
 }
+
+func TestStore_PromoteUserToAdmin(t *testing.T) {
+	db := setupTestDB(t)
+	s := New(db)
+	ctx := context.Background()
+
+	// Insert standard user
+	_, err := db.Exec("INSERT INTO users (id, email, password_hash, verification_token, is_admin) VALUES (10, 'existing-user@example.com', 'hash', 'token', 0)")
+	if err != nil {
+		t.Fatalf("failed to insert user: %v", err)
+	}
+
+	// Promote with case-insensitive email
+	err = s.PromoteUserToAdmin(ctx, "EXISTING-user@EXAMPLE.com")
+	if err != nil {
+		t.Fatalf("failed to promote user: %v", err)
+	}
+
+	// Verify is_admin is 1
+	var isAdmin int
+	err = db.QueryRow("SELECT is_admin FROM users WHERE id = 10").Scan(&isAdmin)
+	if err != nil {
+		t.Fatalf("failed to query user: %v", err)
+	}
+	if isAdmin != 1 {
+		t.Errorf("expected is_admin 1, got %d", isAdmin)
+	}
+}
