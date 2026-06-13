@@ -215,6 +215,16 @@ func InitDB(ctx context.Context) error {
 	// Initialize the store
 	appStore = sqlite.New(db)
 
+	// Promote existing user matching ADMIN_EMAIL to admin if configured
+	adminEmail := os.Getenv("ADMIN_EMAIL")
+	if adminEmail != "" {
+		if err := appStore.PromoteUserToAdmin(ctx, adminEmail); err != nil {
+			slog.Error("failed to promote admin user", "error", err, "admin_email", adminEmail)
+		} else {
+			slog.Info("checked and promoted admin user", "admin_email", adminEmail)
+		}
+	}
+
 	// Start the cache expunger service
 	expunger.Start(ctx, appStore)
 
