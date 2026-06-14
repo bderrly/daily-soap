@@ -358,10 +358,7 @@ document.body.addEventListener('change', async function (e) {
             await saveData(true);
         }
 
-        // 2. Update current date
-        currentDate = newDate;
-
-        // 3. Trigger HTMX request
+        // 2. Trigger HTMX request
         datePicker.dispatchEvent(new CustomEvent('change-date'));
     }
 });
