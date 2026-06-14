@@ -99,57 +99,6 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleReading handles requests for the verses partial template (for HTMX).
-// Accepts a "date" query parameter (YYYY-MM-DD format). Defaults to today if not provided.
-func handleReading(w http.ResponseWriter, r *http.Request) {
-	// Get date from query parameter, default to today
-	dateStr := r.URL.Query().Get("date")
-	if dateStr == "" {
-		// Use user's timezone for default date
-		loc := time.UTC
-		if user, ok := r.Context().Value(userContextKey).(*store.User); ok {
-			if l, err := time.LoadLocation(user.Timezone); err == nil {
-				loc = l
-			}
-		}
-		dateStr = time.Now().In(loc).Format(time.DateOnly)
-	}
-
-	// Get daily text for the requested date
-	dailyText, err := dailytexts.GetDailyText(dateStr)
-	if err != nil {
-		slog.Error("failed to get daily text", "date", dateStr, "error", err)
-		http.Error(w, fmt.Sprintf("Error loading data for date: %s", dateStr), http.StatusInternalServerError)
-		return
-	}
-
-	if dailyText == nil {
-		slog.Warn("no data found for date", "date", dateStr)
-		http.Error(w, fmt.Sprintf("No data found for date: %s", dateStr), http.StatusNotFound)
-		return
-	}
-
-	// Fetch verse content from ESV API (using cache)
-	verseContents, err := fetchPassagesWithCache(r.Context(), dailyText.Verses)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error fetching verses for %s", dateStr), http.StatusInternalServerError)
-		return
-	}
-
-	// Prepare template data
-	data := map[string]any{
-		"esvData": verseContents,
-		"date":    dateStr,
-	}
-
-	// Execute only the verses template
-	if err := tmpl.ExecuteTemplate(w, "verses.gotmpl", data); err != nil {
-		slog.Error("failed to execute verses template", "error", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-}
-
 // handleSOAP handles GET and POST requests for SOAP data.
 func handleSOAP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {

@@ -76,7 +76,6 @@ func Muxer() http.Handler {
 
 	// Protected routes
 	mux.HandleFunc("/", authMiddleware(handleIndex))
-	mux.HandleFunc("/reading", authMiddleware(handleReading))
 	mux.HandleFunc("/soap", authMiddleware(handleSOAP))
 	mux.HandleFunc("/export", authMiddleware(handleExport))
 	mux.HandleFunc("/history", authMiddleware(handleHistory))
