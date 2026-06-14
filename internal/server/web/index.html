@@ -23,38 +23,7 @@
             </div>
         </div>
 
-        <div class="content-wrapper">
-            <div class="verses-section">
-                {{ template "verses.gotmpl" . }}
-            </div>
-            <div class="soap-section">
-                <div class="selected-verses-reference" id="selectedVersesReference"></div>
-                <div class="soap-field">
-                    <label for="observation">Observation</label>
-                    <textarea id="observation" name="observation" rows="6"
-                        placeholder="What do you observe in these verses?">{{.observation}}</textarea>
-                </div>
-                <div class="soap-field">
-                    <label for="application">Application</label>
-                    <textarea id="application" name="application" rows="6"
-                        placeholder="How can you apply this to your life?">{{.application}}</textarea>
-                </div>
-                <div class="soap-field">
-                    <label for="prayer">Prayer</label>
-                    <textarea id="prayer" name="prayer" rows="6"
-                        placeholder="What is your prayer?">{{.prayer}}</textarea>
-                </div>
-                <div class="soap-field">
-                    <label for="date-picker">Date</label>
-                    <div class="soap-actions">
-                        <input type="date" id="date-picker" name="date" value="{{.date}}" hx-get="/reading"
-                            hx-target=".verses-section" hx-trigger="change" hx-include="this">
-                        <button type="button" id="share-btn" class="share-btn">Share</button>
-                    </div>
-                </div>
-                <div class="save-status" id="saveStatus"></div>
-            </div>
-        </div>
+        {{ template "content.gotmpl" . }}
         {{ template "footer.gotmpl" . }}
     </div>
 
