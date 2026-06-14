@@ -68,4 +68,24 @@ func TestHandleIndex_DateQueryParam_Verification(t *testing.T) {
 	if strings.Contains(rr2.Body.String(), "2026-05-07") {
 		t.Errorf("expected response NOT to contain '2026-05-07' when no date provided")
 	}
+
+	// Test Case 3: HTMX request (should return content.gotmpl partial)
+	req3, _ := http.NewRequestWithContext(ctx, "GET", "/", nil)
+	req3.Header.Set("HX-Request", "true")
+	rr3 := httptest.NewRecorder()
+	handleIndex(rr3, req3)
+
+	if rr3.Code != http.StatusOK {
+		t.Fatalf("expected status OK, got %d", rr3.Code)
+	}
+
+	body := rr3.Body.String()
+	// Ensure it does not render the full HTML layout boilerplate
+	if strings.Contains(body, "<!DOCTYPE html>") || strings.Contains(body, "<head>") {
+		t.Errorf("expected HTMX response NOT to contain HTML layout boilerplate, but it did")
+	}
+	// Ensure it renders the content partial container
+	if !strings.Contains(body, `class="content-wrapper" id="content-container"`) {
+		t.Errorf("expected HTMX response to contain content-container wrapper, but it didn't")
+	}
 }

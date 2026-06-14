@@ -87,7 +87,12 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Execute template
-	if err := tmpl.ExecuteTemplate(w, "index.html", data); err != nil {
+	templateName := "index.html"
+	if r.Header.Get("HX-Request") == "true" {
+		templateName = "content.gotmpl"
+	}
+
+	if err := tmpl.ExecuteTemplate(w, templateName, data); err != nil {
 		slog.Error("failed to execute template", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
