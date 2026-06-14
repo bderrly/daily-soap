@@ -14,21 +14,7 @@ if (authForm) {
 
 // Get data from the page (set by inline script in HTML)
 let currentDate = window.SOAP_DATA?.date || '';
-const observationField = document.getElementById('observation');
-const applicationField = document.getElementById('application');
-const prayerField = document.getElementById('prayer');
-const saveStatus = document.getElementById('saveStatus');
-const selectedVersesReference = document.getElementById('selectedVersesReference');
-const datePicker = document.getElementById('date-picker');
-
-// Export Modal Elements
-const shareBtn = document.getElementById('share-btn');
-const exportModal = document.getElementById('export-modal');
-const closeExportModalBtn = document.getElementById('close-export-modal');
-const exportForm = document.getElementById('export-form');
-const exportMethod = document.getElementById('export-method');
-const recipientsGroup = document.getElementById('recipients-group');
-const recipientsInput = document.getElementById('export-recipients');
+let selectedVerseIds = window.SOAP_DATA?.selectedVerses || [];
 
 let saveTimeout = null;
 const SAVE_DELAY = 1000; // 1 second after last change
@@ -84,11 +70,9 @@ function getVerseInfo(element) {
     return null;
 }
 
-// Store selected verses as array of verse IDs
-let selectedVerseIds = window.SOAP_DATA?.selectedVerses || [];
-
 // Update verse reference display
 function updateVerseReference() {
+    const selectedVersesReference = document.getElementById('selectedVersesReference');
     if (!selectedVersesReference) return;
     const reference = formatVerseReference(selectedVerseIds);
     if (reference) {
@@ -135,7 +119,6 @@ function removeVerseHighlight(verseId) {
     elements.forEach(el => el.classList.remove('verse-selected'));
 }
 
-
 function refreshHighlights() {
     // Clear all
     document.querySelectorAll('.verse-selected').forEach(el => el.classList.remove('verse-selected'));
@@ -171,84 +154,17 @@ function handleVerseClick(e) {
 }
 
 function init() {
-    // Delegate verse clicks to body to handle HTMX swaps
-    document.body.addEventListener('click', handleVerseClick);
     refreshHighlights();
-
-    // Export Modal listeners
-    if (shareBtn && exportModal) {
-        shareBtn.addEventListener('click', () => {
-            exportModal.showModal();
-        });
-    }
-
-    if (closeExportModalBtn && exportModal) {
-        closeExportModalBtn.addEventListener('click', () => {
-            exportModal.close();
-        });
-    }
-
-    // Handle option card clicks
-    const optionCards = document.querySelectorAll('.option-card');
-    optionCards.forEach(card => {
-        card.addEventListener('click', () => {
-            const value = card.dataset.value;
-            const targetId = card.dataset.target;
-            const targetInput = document.getElementById(targetId);
-            
-            if (targetInput) {
-                targetInput.value = value;
-                
-                // Update selected class
-                const grid = card.closest('.option-grid');
-                grid.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
-                card.classList.add('selected');
-                
-                // Trigger logic based on change
-                if (targetId === 'export-method') {
-                    if (value === 'email') {
-                        recipientsGroup.style.display = 'block';
-                        recipientsInput.required = true;
-                        
-                        // Hide Markdown format option
-                        const formatMarkdown = document.getElementById('format-markdown');
-                        if (formatMarkdown) {
-                            formatMarkdown.style.display = 'none';
-                            
-                            // If markdown was selected, switch to HTML
-                            const exportFormat = document.getElementById('export-format');
-                            if (exportFormat && exportFormat.value === 'markdown') {
-                                exportFormat.value = 'html';
-                                const htmlCard = document.querySelector('.option-card[data-value="html"][data-target="export-format"]');
-                                if (htmlCard) {
-                                    const grid = htmlCard.closest('.option-grid');
-                                    grid.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
-                                    htmlCard.classList.add('selected');
-                                }
-                            }
-                        }
-                    } else {
-                        recipientsGroup.style.display = 'none';
-                        recipientsInput.required = false;
-                        
-                        // Show Markdown format option
-                        const formatMarkdown = document.getElementById('format-markdown');
-                        if (formatMarkdown) {
-                            formatMarkdown.style.display = 'flex';
-                        }
-                    }
-                }
-            }
-        });
-    });
-
-    if (exportForm) {
-        exportForm.addEventListener('submit', handleExportSubmit);
-    }
 }
 
 async function handleExportSubmit(e) {
     e.preventDefault();
+
+    const exportForm = document.getElementById('export-form');
+    const exportMethod = document.getElementById('export-method');
+    const recipientsInput = document.getElementById('export-recipients');
+    const exportModal = document.getElementById('export-modal');
+    if (!exportForm || !exportMethod || !recipientsInput || !exportModal) return;
 
     const format = document.getElementById('export-format').value;
     const method = exportMethod.value;
@@ -260,9 +176,11 @@ async function handleExportSubmit(e) {
     }
 
     const submitBtn = exportForm.querySelector('button[type="submit"]');
-    const originalBtnText = submitBtn.textContent;
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Exporting...';
+    const originalBtnText = submitBtn?.textContent || 'Export';
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Exporting...';
+    }
 
     try {
         const response = await fetch('/export', {
@@ -311,8 +229,10 @@ async function handleExportSubmit(e) {
         console.error('Export failed:', err);
         alert('Export failed: ' + err.message);
     } finally {
-        submitBtn.disabled = false;
-        submitBtn.textContent = originalBtnText;
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalBtnText;
+        }
     }
 }
 
@@ -325,7 +245,12 @@ if (document.readyState === 'loading') {
 
 // Listen for HTMX swaps to re-apply highlighting
 document.body.addEventListener('htmx:afterSwap', function (evt) {
-    if (evt.target.classList.contains('verses-section')) {
+    if (evt.target.id === 'content-container' || evt.target.classList.contains('verses-section')) {
+        // Read the new date and selected verses from window.SOAP_DATA
+        if (window.SOAP_DATA) {
+            currentDate = window.SOAP_DATA.date || '';
+            selectedVerseIds = window.SOAP_DATA.selectedVerses || [];
+        }
         refreshHighlights();
     }
 });
@@ -337,67 +262,126 @@ document.body.addEventListener('htmx:configRequest', (event) => {
     }
 });
 
-// Handle date changes
-if (datePicker) {
-    datePicker.addEventListener('change', function (e) {
+// Body-level event delegation for clicks
+document.body.addEventListener('click', function (e) {
+    // Verse click handling
+    handleVerseClick(e);
+
+    // Share button click (opens export modal)
+    const shareBtn = e.target.closest('#share-btn');
+    if (shareBtn) {
+        const exportModal = document.getElementById('export-modal');
+        if (exportModal) {
+            exportModal.showModal();
+        }
+        return;
+    }
+
+    // Close export modal button click
+    const closeBtn = e.target.closest('#close-export-modal');
+    if (closeBtn) {
+        const exportModal = document.getElementById('export-modal');
+        if (exportModal) {
+            exportModal.close();
+        }
+        return;
+    }
+
+    // Export option card clicks
+    const card = e.target.closest('.option-card');
+    if (card) {
+        const value = card.dataset.value;
+        const targetId = card.dataset.target;
+        const targetInput = document.getElementById(targetId);
+
+        if (targetInput) {
+            targetInput.value = value;
+
+            // Update selected class
+            const grid = card.closest('.option-grid');
+            if (grid) {
+                grid.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
+            }
+            card.classList.add('selected');
+
+            // Trigger logic based on change
+            if (targetId === 'export-method') {
+                const recipientsGroup = document.getElementById('recipients-group');
+                const recipientsInput = document.getElementById('export-recipients');
+                if (value === 'email') {
+                    if (recipientsGroup) recipientsGroup.style.display = 'block';
+                    if (recipientsInput) recipientsInput.required = true;
+
+                    // Hide Markdown format option
+                    const formatMarkdown = document.getElementById('format-markdown');
+                    if (formatMarkdown) {
+                        formatMarkdown.style.display = 'none';
+
+                        // If markdown was selected, switch to HTML
+                        const exportFormat = document.getElementById('export-format');
+                        if (exportFormat && exportFormat.value === 'markdown') {
+                            exportFormat.value = 'html';
+                            const htmlCard = document.querySelector('.option-card[data-value="html"][data-target="export-format"]');
+                            if (htmlCard) {
+                                const g = htmlCard.closest('.option-grid');
+                                if (g) {
+                                    g.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
+                                }
+                                htmlCard.classList.add('selected');
+                            }
+                        }
+                    }
+                } else {
+                    if (recipientsGroup) recipientsGroup.style.display = 'none';
+                    if (recipientsInput) recipientsInput.required = false;
+
+                    // Show Markdown format option
+                    const formatMarkdown = document.getElementById('format-markdown');
+                    if (formatMarkdown) {
+                        formatMarkdown.style.display = 'flex';
+                    }
+                }
+            }
+        }
+    }
+});
+
+// Handle date changes using body-level event delegation
+document.body.addEventListener('change', async function (e) {
+    if (e.target.id === 'date-picker') {
+        const datePicker = e.target;
         const newDate = datePicker.value;
         if (newDate === currentDate) return;
 
         // 1. Save data for the OLD date (currentDate)
-        // Only save if we have a valid current date
         if (currentDate) {
-            saveData(true);
+            await saveData(true);
         }
 
         // 2. Update current date
         currentDate = newDate;
 
-        // 3. Load data for the NEW date
-        loadDataForDate(newDate);
-    });
-}
+        // 3. Trigger HTMX request
+        datePicker.dispatchEvent(new CustomEvent('change-date'));
+    }
+});
 
-function loadDataForDate(dateStr) {
-    // Show loading state?
-    if (observationField) observationField.value = 'Loading...';
-    if (applicationField) applicationField.value = 'Loading...';
-    if (prayerField) prayerField.value = 'Loading...';
-
-    fetch(`/soap?date=${dateStr}`)
-        .then(response => response.json())
-        .then(data => {
-            // Update fields
-            if (observationField) observationField.value = data.observation || '';
-            if (applicationField) applicationField.value = data.application || '';
-            if (prayerField) prayerField.value = data.prayer || '';
-
-            // Update selected verses
-            selectedVerseIds = data.selectedVerses || [];
-
-            // Update current date from server response (source of truth)
-            if (data.date) {
-                currentDate = data.date;
-                // Ensure date picker reflects the actual date loaded
-                if (datePicker && datePicker.value !== data.date) {
-                    datePicker.value = data.date;
-                }
-            }
-
-            // Refresh highlights
-            refreshHighlights();
-        })
-        .catch(err => {
-            console.error('Failed to load data', err);
-            if (observationField) observationField.value = '';
-            if (applicationField) applicationField.value = '';
-            if (prayerField) prayerField.value = '';
-        });
-}
+// Handle export form submit using body-level event delegation
+document.body.addEventListener('submit', function (e) {
+    if (e.target.id === 'export-form') {
+        handleExportSubmit(e);
+    }
+});
 
 function saveData(immediate = false) {
+    const observationField = document.getElementById('observation');
+    const applicationField = document.getElementById('application');
+    const prayerField = document.getElementById('prayer');
+    const saveStatus = document.getElementById('saveStatus');
+
     // Guard against saving with empty date
     if (!currentDate || !observationField) {
-        return;
+        return Promise.resolve();
     }
 
     const dataToSave = {
@@ -417,7 +401,7 @@ function saveData(immediate = false) {
         saveStatus.className = 'save-status saving';
     }
 
-    fetch('/soap', {
+    return fetch('/soap', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -462,6 +446,9 @@ function scheduleSave() {
     saveTimeout = setTimeout(saveData, SAVE_DELAY);
 }
 
-if (observationField) observationField.addEventListener('input', scheduleSave);
-if (applicationField) applicationField.addEventListener('input', scheduleSave);
-if (prayerField) prayerField.addEventListener('input', scheduleSave);
+// Handle inputs using body-level event delegation
+document.body.addEventListener('input', function (e) {
+    if (e.target.id === 'observation' || e.target.id === 'application' || e.target.id === 'prayer') {
+        scheduleSave();
+    }
+});
