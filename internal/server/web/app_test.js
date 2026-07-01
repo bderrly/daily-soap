@@ -96,7 +96,7 @@ Deno.test("export modal - method change logic", { sanitizeOps: false, sanitizeRe
           <form id="export-form">
             <input type="hidden" id="export-method" value="download">
             <input type="hidden" id="export-format" value="html">
-            
+
             <div class="option-grid">
               <div class="option-card selected" data-value="download" data-target="export-method">Download</div>
               <div class="option-card" id="email-card" data-value="email" data-target="export-method">Email</div>
@@ -169,4 +169,89 @@ Deno.test("export modal - method change logic", { sanitizeOps: false, sanitizeRe
   assertEquals(methodInput.value, 'download');
   assertEquals(recipientsGroup.style.display, 'none');
   assertEquals(markdownCard.style.display, 'flex');
+});
+
+Deno.test("HTMX swap updates currentDate and selectedVerseIds correctly", { sanitizeOps: false, sanitizeResources: false }, async () => {
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <body>
+        <div class="content-wrapper" id="content-container" data-date="2026-07-01" data-selected-verses="[]">
+          <div class="verses-section">
+            <div class="daily-reading">
+              <div class="passages">
+                <div class="verse-content">
+                  <p><span class="verse" data-ref="01002017"><b class="verse-num">17</b>but of the tree...</span></p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="selectedVersesReference"></div>
+          <textarea id="observation"></textarea>
+          <textarea id="application"></textarea>
+          <textarea id="prayer"></textarea>
+          <div id="saveStatus"></div>
+          <input type="date" id="date-picker" value="2026-07-01">
+        </div>
+      </body>
+    </html>
+  `;
+
+  const { window, document, Node } = parseHTML(html);
+
+  // Mock globals
+  window.Node = Node;
+  window.SOAP_DATA = {
+    csrfToken: "test-token"
+  };
+  window.Intl = {
+    DateTimeFormat: () => ({
+      resolvedOptions: () => ({ timeZone: "UTC" })
+    })
+  };
+
+  let lastPayload = null;
+  window.fetch = (url, options) => {
+    if (url === '/soap' && options.method === 'POST') {
+      lastPayload = JSON.parse(options.body);
+    }
+    return Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ status: "success" })
+    });
+  };
+
+  // Load app.js
+  await loadApp(window);
+
+  // Simulate HTMX swap: update attributes on #content-container and dispatch htmx:afterSwap
+  const container = document.getElementById('content-container');
+  assertExists(container, "Container should exist");
+
+  container.setAttribute('data-date', '2026-06-26');
+  container.setAttribute('data-selected-verses', '[]');
+
+  const afterSwapEvent = new window.Event("htmx:afterSwap", {
+    bubbles: true,
+    cancelable: true
+  });
+  container.dispatchEvent(afterSwapEvent);
+
+  // Click the verse to trigger a save
+  const verseSpan = document.querySelector('[data-ref="01002017"]');
+  assertExists(verseSpan, "Verse span should exist");
+
+  const clickEvent = new window.Event("click", {
+    bubbles: true,
+    cancelable: true
+  });
+  verseSpan.dispatchEvent(clickEvent);
+
+  // Wait for the autosave timeout (1000ms delay + buffer)
+  await new Promise(resolve => setTimeout(resolve, 1100));
+
+  // Verify that the save payload was sent with the swapped date 2026-06-26
+  assertExists(lastPayload, "A save request should have been sent");
+  assertEquals(lastPayload.date, '2026-06-26', "The date in the payload should be 2026-06-26");
+  assertEquals(lastPayload.selectedVerses, ['01002017'], "The selected verses should include the clicked verse");
 });

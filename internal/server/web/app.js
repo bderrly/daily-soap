@@ -12,9 +12,22 @@ if (authForm) {
     authForm.appendChild(tzInput);
 }
 
-// Get data from the page (set by inline script in HTML)
-let currentDate = window.SOAP_DATA?.date || '';
-let selectedVerseIds = window.SOAP_DATA?.selectedVerses || [];
+// Get data from the page
+const container = document.getElementById('content-container');
+let currentDate = '';
+let selectedVerseIds = [];
+
+if (container && container.dataset.date) {
+    currentDate = container.dataset.date;
+    try {
+        selectedVerseIds = JSON.parse(container.dataset.selectedVerses || '[]');
+    } catch (e) {
+        console.error('Failed to parse selected verses from container:', e);
+    }
+} else if (window.SOAP_DATA) {
+    currentDate = window.SOAP_DATA.date || '';
+    selectedVerseIds = window.SOAP_DATA.selectedVerses || [];
+}
 
 let saveTimeout = null;
 const SAVE_DELAY = 1000; // 1 second after last change
@@ -246,8 +259,20 @@ if (document.readyState === 'loading') {
 // Listen for HTMX swaps to re-apply highlighting
 document.body.addEventListener('htmx:afterSwap', function (evt) {
     if (evt.target.id === 'content-container' || evt.target.classList.contains('verses-section')) {
-        // Read the new date and selected verses from window.SOAP_DATA
-        if (window.SOAP_DATA) {
+        const container = document.getElementById('content-container');
+        if (container && container.dataset.date) {
+            currentDate = container.dataset.date;
+            try {
+                selectedVerseIds = JSON.parse(container.dataset.selectedVerses || '[]');
+            } catch (e) {
+                console.error('Failed to parse selected verses from container:', e);
+            }
+            // Keep window.SOAP_DATA in sync
+            if (window.SOAP_DATA) {
+                window.SOAP_DATA.date = currentDate;
+                window.SOAP_DATA.selectedVerses = selectedVerseIds;
+            }
+        } else if (window.SOAP_DATA) {
             currentDate = window.SOAP_DATA.date || '';
             selectedVerseIds = window.SOAP_DATA.selectedVerses || [];
         }

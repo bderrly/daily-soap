@@ -1,4 +1,4 @@
-<div class="content-wrapper" id="content-container">
+<div class="content-wrapper" id="content-container" data-date="{{.date}}" data-selected-verses="{{if .selectedVerses}}{{.selectedVerses | toJSON}}{{else}}[]{{end}}">
     <div class="verses-section">
         {{ template "verses.gotmpl" . }}
     </div>
@@ -29,9 +29,4 @@
         </div>
         <div class="save-status" id="saveStatus"></div>
     </div>
-    <script nonce="{{.Nonce}}">
-        window.SOAP_DATA = window.SOAP_DATA || {};
-        window.SOAP_DATA.date = {{.date | printf "%s"}};
-        window.SOAP_DATA.selectedVerses = {{if .selectedVerses}}{{.selectedVerses | toJSON}}{{else}} []{{end}};
-    </script>
 </div>
