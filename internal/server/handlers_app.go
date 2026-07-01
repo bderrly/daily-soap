@@ -36,6 +36,12 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 			loc = time.UTC
 		}
 		dateStr = time.Now().In(loc).Format(time.DateOnly)
+
+		if r.Header.Get("HX-Request") != "true" {
+			redirURL := "/?date=" + dateStr
+			http.Redirect(w, r, redirURL, http.StatusFound)
+			return
+		}
 	}
 
 	// Get data for the requested date (will load year file if needed)

@@ -17,15 +17,34 @@ const container = document.getElementById('content-container');
 let currentDate = '';
 let selectedVerseIds = [];
 
+// Try to get date from URL first
+let urlDate = null;
+try {
+    if (window.location && window.location.search) {
+        const urlParams = new URLSearchParams(window.location.search);
+        urlDate = urlParams.get('date');
+    }
+} catch (e) {
+    console.error('Failed to parse date from URL:', e);
+}
+
+if (urlDate) {
+    currentDate = urlDate;
+}
+
 if (container && container.dataset.date) {
-    currentDate = container.dataset.date;
+    if (!currentDate) {
+        currentDate = container.dataset.date;
+    }
     try {
         selectedVerseIds = JSON.parse(container.dataset.selectedVerses || '[]');
     } catch (e) {
         console.error('Failed to parse selected verses from container:', e);
     }
 } else if (window.SOAP_DATA) {
-    currentDate = window.SOAP_DATA.date || '';
+    if (!currentDate) {
+        currentDate = window.SOAP_DATA.date || '';
+    }
     selectedVerseIds = window.SOAP_DATA.selectedVerses || [];
 }
 
@@ -167,6 +186,12 @@ function handleVerseClick(e) {
 }
 
 function init() {
+    if (currentDate) {
+        const datePicker = document.getElementById('date-picker');
+        if (datePicker && datePicker.value !== currentDate) {
+            datePicker.value = currentDate;
+        }
+    }
     refreshHighlights();
 }
 

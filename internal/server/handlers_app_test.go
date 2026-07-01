@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bderrly/daily-soap/internal/store"
 )
@@ -56,17 +57,19 @@ func TestHandleIndex_DateQueryParam_Verification(t *testing.T) {
 		t.Errorf("expected response to contain '2026-05-07', but it didn't")
 	}
 
-	// Test Case 2: No date parameter (should be today)
+	// Test Case 2: No date parameter (should redirect to today)
 	req2, _ := http.NewRequestWithContext(ctx, "GET", "/", nil)
 	rr2 := httptest.NewRecorder()
 	handleIndex(rr2, req2)
 
-	if rr2.Code != http.StatusOK {
-		t.Fatalf("expected status OK for today, got %d", rr2.Code)
+	if rr2.Code != http.StatusFound {
+		t.Fatalf("expected status Found, got %d", rr2.Code)
 	}
 
-	if strings.Contains(rr2.Body.String(), "2026-05-07") {
-		t.Errorf("expected response NOT to contain '2026-05-07' when no date provided")
+	locHeader := rr2.Header().Get("Location")
+	expectedLoc := "/?date=" + time.Now().In(time.UTC).Format(time.DateOnly)
+	if locHeader != expectedLoc {
+		t.Errorf("expected location header '%s', got '%s'", expectedLoc, locHeader)
 	}
 
 	// Test Case 3: HTMX request (should return content.gotmpl partial)

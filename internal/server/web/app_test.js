@@ -255,3 +255,48 @@ Deno.test("HTMX swap updates currentDate and selectedVerseIds correctly", { sani
   assertEquals(lastPayload.date, '2026-06-26', "The date in the payload should be 2026-06-26");
   assertEquals(lastPayload.selectedVerses, ['01002017'], "The selected verses should include the clicked verse");
 });
+
+Deno.test("initial load - date parameter in URL", { sanitizeOps: false, sanitizeResources: false }, async () => {
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <body>
+        <div class="content-wrapper" id="content-container" data-date="2026-07-01" data-selected-verses="[]">
+          <div id="selectedVersesReference"></div>
+          <textarea id="observation"></textarea>
+          <textarea id="application"></textarea>
+          <textarea id="prayer"></textarea>
+          <div id="saveStatus"></div>
+          <input type="date" id="date-picker" value="2026-07-01">
+        </div>
+      </body>
+    </html>
+  `;
+
+  const { window, document, Node } = parseHTML(html);
+
+  // Mock globals
+  window.Node = Node;
+  window.SOAP_DATA = {
+    csrfToken: "test-token"
+  };
+  window.Intl = {
+    DateTimeFormat: () => ({
+      resolvedOptions: () => ({ timeZone: "UTC" })
+    })
+  };
+  window.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve({ status: "success" }) });
+
+  // Mock location to simulate ?date=2026-06-20
+  window.location = {
+    search: "?date=2026-06-20"
+  };
+
+  // Load app.js
+  await loadApp(window);
+
+  // Verify that date picker value is updated to match URL parameter in init()
+  const datePicker = document.getElementById('date-picker');
+  assertExists(datePicker, "Date picker should exist");
+  assertEquals(datePicker.value, "2026-06-20", "Date picker value should be updated to match URL query parameter");
+});
