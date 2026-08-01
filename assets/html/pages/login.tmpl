@@ -1,17 +1,7 @@
-<!DOCTYPE html>
-<html lang="en">
+{{define "page:title"}}Login - Daily Reading + SOAP{{end}}
 
-<head>
-    {{ template "head.gotmpl" . }}
-    <title>Login - Moravian Texts + SOAP</title>
-</head>
-
-<body>
+{{define "page:content"}}
     <div class="auth-container">
-        <div class="logo-container">
-            <a href="/"><img src="/web/bible.svg" class="logo logo-large" alt="Bible Logo"></a>
-        </div>
-
         <h1 class="header-title login">
             {{if .IsLogin}}Welcome Back{{else}}Create Account{{end}}
         </h1>
@@ -58,9 +48,5 @@
             Already have an account? <a href="/login">Sign in</a>
             {{end}}
         </div>
-        {{ template "footer.gotmpl" . }}
     </div>
-    <script type="module" src="/web/app.js" nonce="{{.Nonce}}"></script>
-</body>
-
-</html>
+{{end}}

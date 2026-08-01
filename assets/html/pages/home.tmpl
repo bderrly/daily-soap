@@ -1,0 +1,68 @@
+{{define "page:title"}}Daily Reading + SOAP{{end}}
+
+{{define "page:content"}}
+    <script nonce="{{.Nonce}}">
+        // Initialize data for the external JavaScript file
+        window.SOAP_DATA = {
+            date: {{.date | printf "%s"}},
+            selectedVerses: {{if .selectedVerses}}{{.selectedVerses | toJSON}}{{else}} []{{end}},
+            csrfToken: "{{.CSRFToken}}"
+        };
+    </script>
+
+    {{template "home:content" .}}
+
+    <dialog id="export-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Export SOAP</h2>
+            <button type="button" id="close-export-modal" class="close-btn">&times;</button>
+        </div>
+        <form id="export-form">
+            <input type="hidden" id="export-method" name="method" value="download">
+            <input type="hidden" id="export-format" name="format" value="html">
+
+            <div class="form-group">
+                <label>Method</label>
+                <div class="option-grid">
+                    <div class="option-card selected" data-value="download" data-target="export-method">
+                        <span>Download</span>
+                    </div>
+                    <div class="option-card" data-value="email" data-target="export-method">
+                        <span>Email</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group" id="format-group">
+                <label>Format</label>
+                <div class="option-grid">
+                    <div class="option-card selected" data-value="html" data-target="export-format">
+                        <span>HTML</span>
+                    </div>
+                    <div class="option-card" id="format-markdown" data-value="markdown" data-target="export-format">
+                        <span>Markdown</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group" id="recipients-group" style="display: none;">
+                <label for="export-recipients">Recipients (comma-separated)</label>
+                <input type="text" id="export-recipients" name="recipients" placeholder="email@example.com">
+            </div>
+            <div class="modal-actions">
+                <button type="submit" class="auth-btn">Export</button>
+            </div>
+        </form>
+    </div>
+    </dialog>
+{{end}}
+
+<!-- Fragment for HTMX partial swap on date change -->
+
+{{define "home:content"}}
+    <div class="content-wrapper" id="content-container" data-date="{{.date}}" data-selected-verses="{{if .selectedVerses}}{{.selectedVerses | toJSON}}{{else}}[]{{end}}">
+        {{template "partial:reading" .}}
+        {{template "partial:soap" .}}
+    </div>
+{{end}}

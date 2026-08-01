@@ -77,10 +77,7 @@ func TestAdminMiddleware(t *testing.T) {
 }
 
 func TestHandleAdmin(t *testing.T) {
-	// Setup mock store
-	origStore := appStore
-	appStore = &mockAdminStore{}
-	defer func() { appStore = origStore }()
+	app := newTestApplication(t, &mockAdminStore{})
 
 	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
 	user := &store.User{ID: 1, IsAdmin: true}
@@ -91,7 +88,7 @@ func TestHandleAdmin(t *testing.T) {
 
 	rr := httptest.NewRecorder()
 
-	handleAdmin(rr, req)
+	app.admin(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Errorf("handleAdmin() returned unexpected status: %v", rr.Code)

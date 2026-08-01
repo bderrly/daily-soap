@@ -4,32 +4,20 @@ package server
 import (
 	"context"
 	"database/sql"
-	"embed"
-	"encoding/json"
 	"fmt"
-	"html/template"
-	"io/fs"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
 
+	"github.com/bderrly/daily-soap/assets"
 	"github.com/bderrly/daily-soap/internal/email"
 	"github.com/bderrly/daily-soap/internal/expunger"
 	"github.com/bderrly/daily-soap/internal/migrations"
 	"github.com/bderrly/daily-soap/internal/store"
 	"github.com/bderrly/daily-soap/internal/store/sqlite"
 )
-
-var (
-	tmpl     *template.Template
-	db       *sql.DB
-	appStore store.Store
-)
-
-//go:embed web
-var web embed.FS
 
 type contextKey string
 
@@ -39,55 +27,48 @@ const (
 	nonceContextKey contextKey = "nonce"
 )
 
-func init() {
-	// Parse templates with function map for safe HTML rendering
-	funcMap := template.FuncMap{
-		"safeHTML": func(s string) template.HTML {
-			return template.HTML(s) // #nosec G203
-		},
-		"toJSON": func(v any) (template.JS, error) {
-			b, err := json.Marshal(v)
-			if err != nil {
-				return "", fmt.Errorf("marshaling JSON: %w", err)
-			}
-			return template.JS(b), nil // #nosec G203
-		},
-	}
-	var err error
-	tmpl, err = template.New("").Funcs(funcMap).ParseFS(web, "web/*.html", "web/*.gotmpl")
-	if err != nil {
-		slog.Error("failed to parse template", "error", err)
-		// Create a minimal template to prevent nil pointer errors
-		tmpl = template.Must(template.New("error").Parse("<html><body><h1>Template Error</h1></body></html>"))
-	}
+// application holds the dependencies needed for HTTP handlers.
+type application struct {
+	html  *htmlRenderer
+	store store.Store
 }
 
-// Muxer returns the HTTP handler for the application.
-func Muxer() http.Handler {
+// NewApplication creates a new application with an initialized HTML renderer.
+func NewApplication(s store.Store) (*application, error) {
+	hr, err := newHTMLRenderer(assets.HTMLFiles, "base.tmpl", "partials/*.tmpl")
+	if err != nil {
+		return nil, fmt.Errorf("creating HTML renderer: %w", err)
+	}
+
+	return &application{
+		html:  hr,
+		store: s,
+	}, nil
+}
+
+// Routes returns the HTTP handler for the application with all routes registered.
+func (app *application) Routes() http.Handler {
 	mux := http.NewServeMux()
 
 	// Public routes
-	mux.HandleFunc("/login", handleLogin)
-	mux.HandleFunc("/register", handleRegister)
-	mux.HandleFunc("/confirm", handleConfirm)
-	mux.HandleFunc("/forgot-password", handleForgotPassword)
-	mux.HandleFunc("/reset-password", handleResetPassword)
-	mux.HandleFunc("/logout", handleLogout)
+	mux.HandleFunc("/login", app.login)
+	mux.HandleFunc("/register", app.register)
+	mux.HandleFunc("/confirm", app.confirm)
+	mux.HandleFunc("/forgot-password", app.forgotPassword)
+	mux.HandleFunc("/reset-password", app.resetPassword)
+	mux.HandleFunc("/logout", app.logout)
 
 	// Protected routes
-	mux.HandleFunc("/", authMiddleware(handleIndex))
-	mux.HandleFunc("/soap", authMiddleware(handleSOAP))
-	mux.HandleFunc("/export", authMiddleware(handleExport))
-	mux.HandleFunc("/history", authMiddleware(handleHistory))
-	mux.HandleFunc("/admin", authMiddleware(adminMiddleware(handleAdmin)))
+	mux.HandleFunc("/", app.authMiddleware(app.home))
+	mux.HandleFunc("GET /soap", app.authMiddleware(app.getSoap))
+	mux.HandleFunc("POST /soap", app.authMiddleware(app.postSoap))
+	mux.HandleFunc("/export", app.authMiddleware(app.export))
+	mux.HandleFunc("/history", app.authMiddleware(app.history))
+	mux.HandleFunc("/admin", app.authMiddleware(adminMiddleware(app.admin)))
 
-	// Create a subdirectory filesystem for the web directory
-	webFS, err := fs.Sub(web, "web")
-	if err != nil {
-		slog.Error("failed to create web subdirectory filesystem", "error", err)
-	} else {
-		mux.Handle("/web/", http.StripPrefix("/web/", http.FileServer(http.FS(webFS))))
-	}
+	// Static files served from the assets package.
+	fileserver := http.FileServerFS(assets.StaticFiles)
+	mux.Handle("/static/", http.StripPrefix("/static", fileserver))
 
 	return securityMiddleware(csrfMiddleware(mux))
 }
@@ -101,7 +82,7 @@ func securityMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 
-		// Content Security Policy with Nonce
+		// Content Security Policy with Nonce.
 		csp := fmt.Sprintf("default-src 'self'; script-src 'self' 'nonce-%s'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'; upgrade-insecure-requests;", nonce)
 		w.Header().Set("Content-Security-Policy", csp)
 
@@ -146,19 +127,19 @@ func csrfMiddleware(next http.Handler) http.Handler {
 }
 
 // authMiddleware checks for a valid session cookie and sets the user in the context.
-func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
+func (app *application) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("session_token")
 		if err != nil {
 			if r.URL.Path == "/" {
-				http.Redirect(w, r, "/login", http.StatusFound)
+				redirect(w, r, "/login", http.StatusFound)
 				return
 			}
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
-		user, err := appStore.GetUserFromSession(r.Context(), cookie.Value)
+		user, err := app.store.GetUserFromSession(r.Context(), cookie.Value)
 		if err != nil {
 			// Invalid session
 			http.SetCookie(w, &http.Cookie{
@@ -171,7 +152,7 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 				SameSite: http.SameSiteLaxMode,
 			})
 			if r.URL.Path == "/" {
-				http.Redirect(w, r, "/login", http.StatusFound)
+				redirect(w, r, "/login", http.StatusFound)
 				return
 			}
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -183,44 +164,45 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// InitDB initializes the SQLite database and applies migrations.
-func InitDB(ctx context.Context) error {
+// InitDB initializes the SQLite database, applies migrations, and returns the
+// initialized store.
+func InitDB(ctx context.Context) (store.Store, error) {
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath == "" {
 		dbPath = "/data/app.db"
 	}
 
-	// Parse the DSN to safely append query parameters
+	// Parse the DSN to safely append query parameters.
 	u, err := url.Parse(dbPath)
 	if err != nil {
-		return fmt.Errorf("failed to parse database path: %w", err)
+		return nil, fmt.Errorf("failed to parse database path: %w", err)
 	}
 
 	q := u.Query()
 	q.Set("_foreign_keys", "on")
 	u.RawQuery = q.Encode()
 
-	db, err = sql.Open("sqlite3", u.String())
+	db, err := sql.Open("sqlite3", u.String())
 	if err != nil {
-		return fmt.Errorf("failed to open database at %s: %w", dbPath, err)
+		return nil, fmt.Errorf("failed to open database at %s: %w", dbPath, err)
 	}
 
-	// Run migrations
+	// Run migrations.
 	if err := migrations.Run(ctx, db); err != nil {
-		return fmt.Errorf("failed to run migrations: %w", err)
+		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
 	slog.Info("database initialized successfully")
 
-	// Initialize the store
-	appStore = sqlite.New(db)
+	// Initialize the store.
+	s := sqlite.New(db)
 
-	// Promote existing user matching ADMIN_EMAIL to admin if configured
+	// Promote existing user matching ADMIN_EMAIL to admin if configured.
 	adminEmail := strings.TrimSpace(os.Getenv("ADMIN_EMAIL"))
 	if adminEmail != "" {
-		rows, err := appStore.PromoteUserToAdmin(ctx, adminEmail)
+		rows, err := s.PromoteUserToAdmin(ctx, adminEmail)
 		if err != nil {
-			return fmt.Errorf("failed to promote admin user %q: %w", adminEmail, err)
+			return nil, fmt.Errorf("failed to promote admin user %q: %w", adminEmail, err)
 		}
 		if rows > 0 {
 			slog.Info("successfully promoted existing user to admin", "admin_email", adminEmail)
@@ -229,16 +211,16 @@ func InitDB(ctx context.Context) error {
 		}
 	}
 
-	// Start the cache expunger service
-	expunger.Start(ctx, appStore)
+	// Start the cache expunger service.
+	expunger.Start(ctx, s)
 
-	// Start email background worker
+	// Start email background worker.
 	emailClient, err := email.GetClient()
 	if err == nil {
-		go email.StartWorker(ctx, appStore, emailClient)
+		go email.StartWorker(ctx, s, emailClient)
 	} else {
 		slog.Warn("email worker not started due to missing configuration", "error", err)
 	}
 
-	return nil
+	return s, nil
 }

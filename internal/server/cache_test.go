@@ -14,16 +14,17 @@ import (
 )
 
 func TestFetchPassagesWithCache_Hit(t *testing.T) {
-	// 1. Setup in-memory DB
-	var err error
-	db, err = sql.Open("sqlite3", ":memory:")
+	// 1. Setup in-memory DB.
+	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatalf("failed to open test db: %v", err)
 	}
 	defer db.Close()
-	appStore = sqlite.New(db)
 
-	// 2. Create table
+	s := sqlite.New(db)
+	app := newTestApplication(t, s)
+
+	// 2. Create table.
 	createCacheSQL := `
 	CREATE TABLE esv_cache (
 		reference TEXT PRIMARY KEY,
@@ -34,7 +35,7 @@ func TestFetchPassagesWithCache_Hit(t *testing.T) {
 		t.Fatalf("failed to create table: %v", err)
 	}
 
-	// 3. Insert fake cache entry
+	// 3. Insert fake cache entry.
 	fakeRef := "Test 1:1"
 	fakeResponse := esv.Response{
 		Query:    fakeRef,
@@ -47,14 +48,13 @@ func TestFetchPassagesWithCache_Hit(t *testing.T) {
 		t.Fatalf("failed to insert fake cache: %v", err)
 	}
 
-	// 4. Call function under test
-	// Note: fetchPassagesWithCache uses the global 'db' variable which we set above
-	result, err := fetchPassagesWithCache(context.TODO(), []string{fakeRef})
+	// 4. Call function under test.
+	result, err := app.fetchPassagesWithCache(context.TODO(), []string{fakeRef})
 	if err != nil {
 		t.Fatalf("fetchPassagesWithCache failed: %v", err)
 	}
 
-	// 5. Verify result matches cache
+	// 5. Verify result matches cache.
 	if !reflect.DeepEqual(result, fakeResponse) {
 		t.Errorf("expected %v, got %v", fakeResponse, result)
 	}

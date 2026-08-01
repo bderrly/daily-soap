@@ -17,19 +17,19 @@ import (
 	"github.com/bderrly/daily-soap/internal/store"
 )
 
-func handleIndex(w http.ResponseWriter, r *http.Request) {
+func (app *application) home(w http.ResponseWriter, r *http.Request) {
 	user := r.Context().Value(userContextKey).(*store.User)
 
-	// Only handle root path
+	// Only handle root path.
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
 		return
 	}
 
-	// Get date from query parameter, default to today
+	// Get date from query parameter, default to today.
 	dateStr := r.URL.Query().Get("date")
 	if dateStr == "" {
-		// Get current date in YYYY-MM-DD format based on user location
+		// Get current date in YYYY-MM-DD format based on user location.
 		loc, err := time.LoadLocation(user.Timezone)
 		if err != nil {
 			slog.Error("failed to load user location", "timezone", user.Timezone, "error", err)
@@ -37,14 +37,14 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 		}
 		dateStr = time.Now().In(loc).Format(time.DateOnly)
 
-		if r.Header.Get("HX-Request") != "true" {
+		if !isHTMXRequest(r) {
 			redirURL := "/?date=" + dateStr
 			http.Redirect(w, r, redirURL, http.StatusFound)
 			return
 		}
 	}
 
-	// Get data for the requested date (will load year file if needed)
+	// Get data for the requested date (will load year file if needed).
 	dailyText, err := dailytexts.GetDailyText(dateStr)
 	if err != nil {
 		slog.Error("failed to get daily text", "date", dateStr, "error", err)
@@ -58,18 +58,18 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch verse content from ESV API (using cache)
-	verseContents, err := fetchPassagesWithCache(r.Context(), dailyText.Verses)
+	// Fetch verse content from ESV API (using cache).
+	verseContents, err := app.fetchPassagesWithCache(r.Context(), dailyText.Verses)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error loading verses for %s", dateStr), http.StatusInternalServerError)
 		return
 	}
 
-	// Load existing SOAP data from database
-	soapData, err := appStore.GetSOAPData(r.Context(), user.ID, dateStr)
+	// Load existing SOAP data from database.
+	soapData, err := app.store.GetSOAPData(r.Context(), user.ID, dateStr)
 	if err != nil {
 		slog.Warn("failed to load SOAP data", "date", dateStr, "error", err)
-		// Continue with empty values if there's an error
+		// Continue with empty values if there's an error.
 		soapData = &store.SOAPData{
 			Date:           dateStr,
 			Observation:    "",
@@ -79,7 +79,7 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Prepare template data
+	// Prepare template data.
 	data := map[string]any{
 		"esvData":        verseContents,
 		"date":           dateStr,
@@ -92,40 +92,31 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 		"Nonce":          r.Context().Value(nonceContextKey).(string),
 	}
 
-	// Execute template
-	templateName := "index.html"
-	if r.Header.Get("HX-Request") == "true" {
-		templateName = "content.gotmpl"
+	// Render the base template by default.
+	templateName := "base"
+
+	// But if the request is coming from HTMX, render the home:content
+	// template instead.
+	if isHTMXRequest(r) {
+		templateName = "home:content"
 	}
 
-	if err := tmpl.ExecuteTemplate(w, templateName, data); err != nil {
+	if err := app.html.render(w, http.StatusOK, data, templateName, "pages/home.tmpl"); err != nil {
 		slog.Error("failed to execute template", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 }
 
-// handleSOAP handles GET and POST requests for SOAP data.
-func handleSOAP(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		handleGetSOAP(w, r)
-	case http.MethodPost:
-		handlePostSOAP(w, r)
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-
-// handleGetSOAP retrieves SOAP data for a given date.
-func handleGetSOAP(w http.ResponseWriter, r *http.Request) {
+// getSoap retrieves SOAP data for a given date.
+func (app *application) getSoap(w http.ResponseWriter, r *http.Request) {
 	user := r.Context().Value(userContextKey).(*store.User)
 	dateStr := r.URL.Query().Get("date")
 	if dateStr == "" {
 		dateStr = time.Now().Format(time.DateOnly)
 	}
 
-	soapData, err := appStore.GetSOAPData(r.Context(), user.ID, dateStr)
+	soapData, err := app.store.GetSOAPData(r.Context(), user.ID, dateStr)
 	if err != nil {
 		slog.Error("failed to get SOAP data", "date", dateStr, "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -140,8 +131,8 @@ func handleGetSOAP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handlePostSOAP saves SOAP data.
-func handlePostSOAP(w http.ResponseWriter, r *http.Request) {
+// postSoap saves SOAP data.
+func (app *application) postSoap(w http.ResponseWriter, r *http.Request) {
 	user := r.Context().Value(userContextKey).(*store.User)
 
 	var soapData store.SOAPData
@@ -151,7 +142,7 @@ func handlePostSOAP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := appStore.SaveSOAPData(r.Context(), user.ID, &soapData); err != nil {
+	if err := app.store.SaveSOAPData(r.Context(), user.ID, &soapData); err != nil {
 		slog.Error("failed to save SOAP data", "error", err)
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(map[string]string{"error": "Failed to save data"}); err != nil {
@@ -173,8 +164,8 @@ type exportRequest struct {
 	Recipients []string `json:"recipients"` // only for method=email
 }
 
-// handleExport handles SOAP journal export requests.
-func handleExport(w http.ResponseWriter, r *http.Request) {
+// export handles SOAP journal export requests.
+func (app *application) export(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -189,16 +180,15 @@ func handleExport(w http.ResponseWriter, r *http.Request) {
 
 	user := r.Context().Value(userContextKey).(*store.User)
 
-	// Fetch SOAP data via appStore.GetSOAPData(r.Context(), user.ID, req.Date)
-	soapData, err := appStore.GetSOAPData(r.Context(), user.ID, req.Date)
+	// Fetch SOAP data.
+	soapData, err := app.store.GetSOAPData(r.Context(), user.ID, req.Date)
 	if err != nil {
 		slog.Error("failed to get SOAP data for export", "date", req.Date, "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	// Fetch Scripture content
-	// Get daily text via dailytexts.GetDailyText(req.Date)
+	// Fetch Scripture content.
 	dailyText, err := dailytexts.GetDailyText(req.Date)
 	if err != nil {
 		slog.Error("failed to get daily text for export", "date", req.Date, "error", err)
@@ -211,12 +201,12 @@ func handleExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch verse content from ESV API (using cache)
+	// Fetch verse content from ESV API (using cache).
 	references := dailyText.Verses
 	if len(soapData.SelectedVerses) > 0 {
 		references = []string{esv.FormatReferences(soapData.SelectedVerses)}
 	}
-	verseContents, err := fetchPassagesWithCache(r.Context(), references)
+	verseContents, err := app.fetchPassagesWithCache(r.Context(), references)
 	if err != nil {
 		slog.Error("failed to fetch verses for export", "date", req.Date, "error", err)
 		http.Error(w, fmt.Sprintf("Error loading verses for %s", req.Date), http.StatusInternalServerError)
@@ -227,7 +217,7 @@ func handleExport(w http.ResponseWriter, r *http.Request) {
 
 	// Email Logic:
 	if req.Method == "email" {
-		// Only allow format: html
+		// Only allow format: html.
 		if req.Format != "html" {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
@@ -251,14 +241,13 @@ func handleExport(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Call email.QueueExportEmail(r.Context(), appStore, user, req.Date, req.Recipients, htmlContent)
-		if err := email.QueueExportEmail(r.Context(), appStore, user, req.Date, req.Recipients, buf.String()); err != nil {
+		if err := email.QueueExportEmail(r.Context(), app.store, user, req.Date, req.Recipients, buf.String()); err != nil {
 			slog.Error("failed to queue export email", "error", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 
-		// Return 202 Accepted with JSON {"status": "queued"}
+		// Return 202 Accepted with JSON {"status": "queued"}.
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
 		if err := json.NewEncoder(w).Encode(map[string]string{"status": "queued"}); err != nil {
@@ -284,14 +273,14 @@ func handleExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set Content-Type and Content-Disposition
+	// Set Content-Type and Content-Disposition.
 	w.Header().Set("Content-Type", exporter.ContentType())
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 
-	// Write generated content to w
+	// Write generated content to w.
 	if err := exporter.Export(r.Context(), w, soapData, scriptureHTML); err != nil {
 		slog.Error("failed to export content for download", "error", err)
-		// Note: headers already sent, can't change status code easily
+		// Note: headers already sent, can't change status code easily.
 	}
 }
 
@@ -304,7 +293,7 @@ type HistoryEntry struct {
 	PassagesHTML []template.HTML
 }
 
-func handleHistory(w http.ResponseWriter, r *http.Request) {
+func (app *application) history(w http.ResponseWriter, r *http.Request) {
 	user := r.Context().Value(userContextKey).(*store.User)
 	loc, err := time.LoadLocation(user.Timezone)
 	if err != nil {
@@ -340,7 +329,7 @@ func handleHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	prevEndDate := endDate.AddDate(0, 0, -days)
 
-	entries, err := appStore.GetSOAPDataRange(r.Context(), user.ID, startDateStr, endDateStr)
+	entries, err := app.store.GetSOAPDataRange(r.Context(), user.ID, startDateStr, endDateStr)
 	if err != nil {
 		slog.Error("failed to get history data", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -353,7 +342,7 @@ func handleHistory(w http.ResponseWriter, r *http.Request) {
 
 		if len(entry.SelectedVerses) > 0 {
 			references := []string{esv.FormatReferences(entry.SelectedVerses)}
-			esvRes, err := fetchPassagesWithCache(r.Context(), references)
+			esvRes, err := app.fetchPassagesWithCache(r.Context(), references)
 			if err != nil {
 				slog.Error("failed to fetch verses for history", "date", entry.Date, "error", err)
 			} else {
@@ -380,12 +369,12 @@ func handleHistory(w http.ResponseWriter, r *http.Request) {
 		"PrevEndDate": prevEndDate.Format(time.DateOnly),
 		"NextEndDate": nextEndDate.Format(time.DateOnly),
 		"ShowNext":    nextEndDate.After(endDate) || endDate.Format(time.DateOnly) != time.Now().In(loc).Format(time.DateOnly),
-		"User":        user,
+		"user":        user,
 		"CSRFToken":   r.Context().Value(csrfContextKey).(string),
 		"Nonce":       r.Context().Value(nonceContextKey).(string),
 	}
 
-	if err := tmpl.ExecuteTemplate(w, "history.html", data); err != nil {
+	if err := app.html.render(w, http.StatusOK, data, "base", "pages/history.tmpl"); err != nil {
 		slog.Error("failed to execute history template", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return

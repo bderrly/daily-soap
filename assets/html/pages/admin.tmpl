@@ -1,0 +1,82 @@
+{{define "page:title"}}Admin Dashboard{{end}}
+
+{{define "page:content"}}
+    <div class="admin-container">
+        <div class="dashboard-header">
+            <h2 class="dashboard-title">Admin Dashboard</h2>
+        </div>
+
+        <div class="metrics-grid">
+            <div class="metric-card total">
+                <div class="metric-title">Total Users</div>
+                <div class="metric-value">{{.stats.TotalUsers}}</div>
+            </div>
+            <div class="metric-card active">
+                <div class="metric-title">Active (7 Days)</div>
+                <div class="metric-value">{{.stats.ActiveLast7Days}}</div>
+            </div>
+            <div class="metric-card verified">
+                <div class="metric-title">Verified Within 48h</div>
+                <div class="metric-value">{{.stats.CompletedWithinDeadline}}</div>
+            </div>
+            <div class="metric-card failed">
+                <div class="metric-title">Failed / Unverified</div>
+                <div class="metric-value">{{.stats.FailedWithinDeadline}}</div>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <div class="table-header-title">User Directory</div>
+            <div style="overflow-x: auto;">
+                <table class="directory-table">
+                    <thead>
+                        <tr>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Verified</th>
+                            <th>Activity</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range .directory}}
+                        <tr>
+                            <td style="font-weight: 500;">{{.Email}}</td>
+                            <td>
+                                {{if .IsAdmin}}
+                                <span class="badge badge-admin">Admin</span>
+                                {{else}}
+                                <span class="badge badge-user">User</span>
+                                {{end}}
+                            </td>
+                            <td>
+                                {{if .IsVerified}}
+                                <span class="badge badge-verified">Verified</span>
+                                {{else}}
+                                <span class="badge badge-unverified">Unverified</span>
+                                {{end}}
+                            </td>
+                            <td class="date-text">{{.CreatedAt.Format "Jan 02, 2006"}}</td>
+                            <td class="date-text">
+                                {{if .VerifiedAt}}
+                                    {{.VerifiedAt.Format "Jan 02, 2006"}}
+                                {{else}}
+                                    <span style="color: #cbd5e1;">-</span>
+                                {{end}}
+                            </td>
+                            <td>
+                                {{if .ActiveLast7}}
+                                <span class="badge badge-active">Active</span>
+                                {{else}}
+                                <span class="badge badge-inactive">Inactive</span>
+                                {{end}}
+                            </td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+{{end}}

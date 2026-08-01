@@ -19,20 +19,20 @@ func adminMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// handleAdmin handles the admin directory and stats view.
-func handleAdmin(w http.ResponseWriter, r *http.Request) {
+// admin handles the admin directory and stats view.
+func (app *application) admin(w http.ResponseWriter, r *http.Request) {
 	user := r.Context().Value(userContextKey).(*store.User)
 	csrfToken := r.Context().Value(csrfContextKey).(string)
 	nonce := r.Context().Value(nonceContextKey).(string)
 
-	stats, err := appStore.GetAdminStats(r.Context())
+	stats, err := app.store.GetAdminStats(r.Context())
 	if err != nil {
 		slog.Error("failed to get admin stats", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
-	directory, err := appStore.GetAdminUserDirectory(r.Context())
+	directory, err := app.store.GetAdminUserDirectory(r.Context())
 	if err != nil {
 		slog.Error("failed to get admin user directory", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -40,19 +40,15 @@ func handleAdmin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]any{
-		"user":       user,
-		"User":       user,
-		"stats":      stats,
-		"Stats":      stats,
-		"directory":  directory,
-		"Directory":  directory,
-		"csrf_token": csrfToken,
-		"CSRFToken":  csrfToken,
-		"nonce":      nonce,
-		"Nonce":      nonce,
+		"CustomStylesheet": "admin.css",
+		"user":             user,
+		"stats":            stats,
+		"directory":        directory,
+		"CSRFToken":        csrfToken,
+		"Nonce":            nonce,
 	}
 
-	if err := tmpl.ExecuteTemplate(w, "admin.html", data); err != nil {
+	if err := app.html.render(w, http.StatusOK, data, "base", "pages/admin.tmpl"); err != nil {
 		slog.Error("failed to execute admin template", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return

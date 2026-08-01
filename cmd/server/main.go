@@ -38,11 +38,17 @@ func run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if err := server.InitDB(ctx); err != nil {
+	appStore, err := server.InitDB(ctx)
+	if err != nil {
 		return fmt.Errorf("initializing database: %w", err)
 	}
 
-	mux := server.Muxer()
+	app, err := server.NewApplication(appStore)
+	if err != nil {
+		return fmt.Errorf("creating application: %w", err)
+	}
+
+	mux := app.Routes()
 
 	port := os.Getenv("PORT")
 	if port == "" {
