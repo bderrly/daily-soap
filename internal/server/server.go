@@ -62,7 +62,7 @@ func (app *application) Routes() http.Handler {
 	mux.HandleFunc("/", app.authMiddleware(app.home))
 	mux.HandleFunc("GET /soap", app.authMiddleware(app.getSoap))
 	mux.HandleFunc("POST /soap", app.authMiddleware(app.postSoap))
-	mux.HandleFunc("/export", app.authMiddleware(app.export))
+	mux.HandleFunc("GET /export", app.authMiddleware(app.export))
 	mux.HandleFunc("/history", app.authMiddleware(app.history))
 	mux.HandleFunc("/admin", app.authMiddleware(adminMiddleware(app.admin)))
 
@@ -108,7 +108,11 @@ func csrfMiddleware(next http.Handler) http.Handler {
 			token = cookie.Value
 		}
 
-		if r.Method == http.MethodPost {
+		switch r.Method {
+		case http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace:
+			// Safe method: Skip token verification.
+		default:
+			// Unsafe method (POST, PUT, DELETE, PATCH): Verify CSRF token.
 			requestToken := r.Header.Get("X-CSRF-Token")
 			if requestToken == "" {
 				requestToken = r.FormValue("csrf_token")

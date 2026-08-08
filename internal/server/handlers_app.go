@@ -166,11 +166,6 @@ type exportRequest struct {
 
 // export handles SOAP journal export requests.
 func (app *application) export(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
 	var req exportRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		slog.Error("failed to decode export request", "error", err)
