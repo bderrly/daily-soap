@@ -34,6 +34,8 @@ type application struct {
 }
 
 // NewApplication creates a new application with an initialized HTML renderer.
+//
+//nolint:revive // returning unexported application struct is intentional for internal package usage
 func NewApplication(s store.Store) (*application, error) {
 	hr, err := newHTMLRenderer(assets.HTMLFiles, "base.tmpl", "partials/*.tmpl")
 	if err != nil {

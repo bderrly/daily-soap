@@ -27,7 +27,7 @@
 
         <div class="table-container">
             <div class="table-header-title">User Directory</div>
-            <div style="overflow-x: auto;">
+            <div class="table-overflow-wrapper">
                 <table class="directory-table">
                     <thead>
                         <tr>
@@ -42,7 +42,7 @@
                     <tbody>
                         {{range .directory}}
                         <tr>
-                            <td style="font-weight: 500;">{{.Email}}</td>
+                            <td class="email-cell">{{.Email}}</td>
                             <td>
                                 {{if .IsAdmin}}
                                 <span class="badge badge-admin">Admin</span>
@@ -62,7 +62,7 @@
                                 {{if .VerifiedAt}}
                                     {{.VerifiedAt.Format "Jan 02, 2006"}}
                                 {{else}}
-                                    <span style="color: #cbd5e1;">-</span>
+                                    <span class="empty-value">-</span>
                                 {{end}}
                             </td>
                             <td>

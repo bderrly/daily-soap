@@ -101,7 +101,14 @@ h1 {
     font-size: 0.9rem;
 }
 
-.login .header-title {
+.nav-link {
+    margin-right: 15px;
+    text-decoration: none;
+    color: #4a5568;
+    font-weight: 500;
+}
+
+.header-title.login {
     text-align: center;
     margin-bottom: 2rem;
     color: var(--text-primary);
@@ -476,6 +483,10 @@ p:not(.line) {
     gap: 0.5rem;
 }
 
+#recipients-group {
+    display: none;
+}
+
 .form-group label {
     font-weight: 500;
     color: var(--text-primary);
@@ -742,11 +753,18 @@ p:not(.line) {
     }
 
     .container {
-        height: calc(100vh - 4rem);
+        flex: 1;
+        min-height: 0;
         display: flex;
         flex-direction: column;
         overflow: hidden;
         padding: 1.5rem;
+    }
+
+    main {
+        flex: 1;
+        min-height: 0;
+        display: contents;
     }
 
     .content-wrapper {
