@@ -812,4 +812,25 @@ p:not(.line) {
         margin-top: 1.5rem;
         padding-top: 1rem;
     }
+
+    /* Restore normal scrolling for the history page on desktop */
+    body:has(.history-controls) {
+        height: auto;
+        overflow: auto;
+        display: block;
+    }
+
+    body:has(.history-controls) .container {
+        flex: none;
+        min-height: 0;
+        display: block;
+        overflow: visible;
+    }
+
+    body:has(.history-controls) main {
+        flex: none;
+        min-height: 0;
+        display: block;
+    }
 }
+

@@ -1,14 +1,5 @@
 :root {
-    /* Shared colors (mirrors mysoaps.css) */
-    --primary-color: #4A6FA5;
-    --primary-hover: #3b5a84;
-    --text-primary: #2C3E50;
-    --text-secondary: #666;
-    --border-color: #E0E6ED;
-    --white: #FFFFFF;
-    --box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-
-    /* Admin-specific */
+    /* Admin-specific layout colors and gradients */
     --admin-bg: #f8fafc;
     --admin-card-bg: rgba(255, 255, 255, 0.9);
     --admin-text-main: #1e293b;
@@ -32,113 +23,34 @@ body {
     background-attachment: fixed;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     color: var(--admin-text-main);
-    margin: 0;
 }
 
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
+/* Override mysoaps.css desktop body/container locks so admin page scrolls normally */
+@media (min-width: 901px) {
+    body {
+        height: auto;
+        overflow: auto;
+        display: block;
+    }
+
+    .container {
+        flex: none;
+        min-height: 0;
+        display: block;
+        overflow: visible;
+    }
+
+    main {
+        flex: none;
+        min-height: 0;
+        display: block;
+    }
 }
-
-.logo {
-    aspect-ratio: 1;
-    margin: 0;
-    display: block;
-    opacity: 0.9;
-    width: 48px;
-    height: 48px;
-}
-
-/* ── Shared header / nav / footer (mirrors mysoaps.css) ── */
-
-.container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 2rem;
-}
-
-.header-controls {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-}
-
-.header-brand {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-}
-
-.header-title {
-    margin: 0;
-    color: var(--primary-color);
-    font-size: 1.8rem;
-    font-weight: 600;
-}
-
-.user-email {
-    margin-right: 1rem;
-    color: var(--text-secondary);
-    font-size: 0.9rem;
-}
-
-.nav-link {
-    margin-right: 15px;
-    text-decoration: none;
-    color: var(--text-primary);
-    font-weight: 500;
-}
-
-.logout-btn {
-    text-decoration: none;
-    color: var(--primary-color);
-    font-weight: 500;
-    font-size: 0.9rem;
-    padding: 0.5rem 1rem;
-    border: 1px solid var(--primary-color);
-    border-radius: 4px;
-    transition: all 0.2s;
-}
-
-.logout-btn:hover {
-    background-color: var(--primary-color);
-    color: var(--white);
-}
-
-.site-footer {
-    margin-top: 2rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid var(--border-color);
-    color: var(--text-secondary);
-    font-size: 0.85rem;
-    text-align: center;
-}
-
-.site-footer-content {
-    display: flex;
-    justify-content: center;
-    gap: 1.5rem;
-    align-items: center;
-}
-
-.site-footer a {
-    color: var(--primary-color);
-    text-decoration: none;
-    transition: color 0.2s;
-}
-
-.site-footer a:hover {
-    color: var(--primary-hover);
-    text-decoration: underline;
-}
-
 
 .admin-container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 2rem;
+    padding: 2rem 0;
     animation: fadeIn 0.6s ease-out;
 }
 
@@ -329,4 +241,3 @@ body {
 .empty-value {
     color: #cbd5e1;
 }
-
