@@ -56,7 +56,7 @@ body {
 }
 
 .container {
-    max-width: 1200px;
+    max-width: 1440px;
     margin: 0 auto;
     background: var(--bg-container);
     border-radius: 12px;
@@ -266,6 +266,10 @@ p:not(.line) {
 
 .save-status.error {
     color: var(--error-color);
+}
+
+.passages {
+  padding-right: 0.5rem;
 }
 
 .verses-section [data-ref] {
