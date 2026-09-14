@@ -53,50 +53,9 @@ const SAVE_DELAY = 1000; // 1 second after last change
 
 // Get verse info from a verse element
 function getVerseInfo(element) {
-    // 1. Check for data-ref on the element itself or ancestors
-    const refElement = element.closest('[data-ref]');
-    if (refElement) {
-        const ref = refElement.dataset.ref;
-        return parseVerseId(ref);
-    }
-
-    // 2. Positional fallback: look for preceding verse number (only using .verse-num)
-    const verseContent = element.closest('.verse-content');
-    if (verseContent) {
-        // Get all verse number elements in this container
-        const allVerseNums = Array.from(verseContent.querySelectorAll('.verse-num'));
-
-        if (allVerseNums.length > 0) {
-            // Find the verse number that comes before this element
-            let bestVerseNum = null;
-
-            for (const verseNum of allVerseNums) {
-                const position = element.compareDocumentPosition(verseNum);
-                if (position & Node.DOCUMENT_POSITION_PRECEDING ||
-                    position & Node.DOCUMENT_POSITION_CONTAINS) {
-                    if (!bestVerseNum) {
-                        bestVerseNum = verseNum;
-                    } else {
-                        const bestPos = bestVerseNum.compareDocumentPosition(verseNum);
-                        if (bestPos & Node.DOCUMENT_POSITION_FOLLOWING) {
-                            bestVerseNum = verseNum;
-                        }
-                    }
-                }
-            }
-
-            if (bestVerseNum) {
-                // Try to get info from the best verse number found
-                // It should be a descendant of a [data-ref] span
-                return getVerseInfo(bestVerseNum);
-            }
-
-            // Fallback: use the first verse number if nothing found
-            const firstVerseNum = allVerseNums[0];
-            if (firstVerseNum) {
-                 return getVerseInfo(firstVerseNum);
-            }
-        }
+    const refElement = element.closest('.verses-section [data-ref]');
+    if (refElement && refElement.dataset.ref) {
+        return parseVerseId(refElement.dataset.ref);
     }
 
     return null;
@@ -168,6 +127,14 @@ function refreshHighlights() {
 }
 
 function handleVerseClick(e) {
+    // Prevent selection if user is dragging to select text
+    if (window.getSelection) {
+        const selection = window.getSelection();
+        if (selection && selection.toString().trim().length > 0) {
+            return;
+        }
+    }
+
     // Only handle clicks within a verse inside the verses section
     if (!e.target.closest('.verses-section .verse-content')) {
         return;

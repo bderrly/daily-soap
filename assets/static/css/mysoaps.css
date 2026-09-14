@@ -268,7 +268,7 @@ p:not(.line) {
     color: var(--error-color);
 }
 
-.verses-section .verse-content {
+.verses-section [data-ref] {
     cursor: pointer;
 }
 

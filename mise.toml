@@ -1,4 +1,6 @@
 [tools]
+deno = "latest"
+"github:bokwoon95/wgo" = "latest"
 go = "1.25"
 gofumpt = "latest"
 golangci-lint = "latest"

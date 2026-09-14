@@ -86,6 +86,170 @@ Deno.test("verse highlighting - valid highlighting", { sanitizeOps: false, sanit
   assertEquals(isHighlighted, true, "Verse should be highlighted");
 });
 
+Deno.test("verse highlighting - clicking verse number highlights verse", { sanitizeOps: false, sanitizeResources: false }, async () => {
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <body>
+        <div class="verses-section">
+          <div class="daily-reading">
+            <div class="passages">
+              <div class="verse-content">
+                <p><span class="verse" data-ref="01002017"><b class="verse-num">17</b>but of the tree...</span></p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="selectedVersesReference"></div>
+        <textarea id="observation"></textarea>
+        <textarea id="application"></textarea>
+        <textarea id="prayer"></textarea>
+        <div id="saveStatus"></div>
+      </body>
+    </html>
+  `;
+
+  const { window, document, Node } = parseHTML(html);
+
+  window.Node = Node;
+  window.SOAP_DATA = {
+    date: "2026-03-07",
+    selectedVerses: [],
+    csrfToken: "test-token"
+  };
+  window.Intl = {
+    DateTimeFormat: () => ({
+      resolvedOptions: () => ({ timeZone: "UTC" })
+    })
+  };
+  window.fetch = () => Promise.resolve({ json: () => Promise.resolve({}) });
+
+  await loadApp(window);
+
+  const verseNum = document.querySelector('.verse-num');
+  assertExists(verseNum, "Verse number should exist");
+
+  verseNum.dispatchEvent(new window.Event("click", { bubbles: true, cancelable: true }));
+
+  const verseSpan = document.querySelector('[data-ref="01002017"]');
+  assertEquals(verseSpan.classList.contains("verse-selected"), true, "Verse should be highlighted when clicking verse number");
+});
+
+Deno.test("verse highlighting - clicking non-verse areas does not highlight", { sanitizeOps: false, sanitizeResources: false }, async () => {
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <body>
+        <div class="verses-section">
+          <div class="daily-reading">
+            <h2>Genesis 2:17-18</h2>
+            <div class="passages">
+              <div class="verse-content">
+                <p id="para"><span class="verse" data-ref="01002017"><b class="verse-num">17</b>but of the tree...</span></p>
+              </div>
+              <div class="copyright" id="copyright">ESV</div>
+            </div>
+          </div>
+        </div>
+        <div id="selectedVersesReference"></div>
+        <textarea id="observation"></textarea>
+        <textarea id="application"></textarea>
+        <textarea id="prayer"></textarea>
+        <div id="saveStatus"></div>
+      </body>
+    </html>
+  `;
+
+  const { window, document, Node } = parseHTML(html);
+
+  window.Node = Node;
+  window.SOAP_DATA = {
+    date: "2026-03-07",
+    selectedVerses: [],
+    csrfToken: "test-token"
+  };
+  window.Intl = {
+    DateTimeFormat: () => ({
+      resolvedOptions: () => ({ timeZone: "UTC" })
+    })
+  };
+  window.fetch = () => Promise.resolve({ json: () => Promise.resolve({}) });
+
+  await loadApp(window);
+
+  const verseSpan = document.querySelector('[data-ref="01002017"]');
+
+  // Click on paragraph (empty space outside the verse span)
+  const para = document.getElementById('para');
+  para.dispatchEvent(new window.Event("click", { bubbles: true, cancelable: true }));
+  assertEquals(verseSpan.classList.contains("verse-selected"), false, "Verse should NOT be highlighted when clicking paragraph space");
+
+  // Click on header
+  const h2 = document.querySelector('h2');
+  h2.dispatchEvent(new window.Event("click", { bubbles: true, cancelable: true }));
+  assertEquals(verseSpan.classList.contains("verse-selected"), false, "Verse should NOT be highlighted when clicking header");
+
+  // Click on copyright
+  const copyright = document.getElementById('copyright');
+  copyright.dispatchEvent(new window.Event("click", { bubbles: true, cancelable: true }));
+  assertEquals(verseSpan.classList.contains("verse-selected"), false, "Verse should NOT be highlighted when clicking copyright");
+});
+
+Deno.test("verse highlighting - text selection does not trigger verse toggle", { sanitizeOps: false, sanitizeResources: false }, async () => {
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <body>
+        <div class="verses-section">
+          <div class="daily-reading">
+            <div class="passages">
+              <div class="verse-content">
+                <p><span class="verse" data-ref="01002017"><b class="verse-num">17</b>but of the tree...</span></p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="selectedVersesReference"></div>
+        <textarea id="observation"></textarea>
+        <textarea id="application"></textarea>
+        <textarea id="prayer"></textarea>
+        <div id="saveStatus"></div>
+      </body>
+    </html>
+  `;
+
+  const { window, document, Node } = parseHTML(html);
+
+  window.Node = Node;
+  window.SOAP_DATA = {
+    date: "2026-03-07",
+    selectedVerses: [],
+    csrfToken: "test-token"
+  };
+  window.Intl = {
+    DateTimeFormat: () => ({
+      resolvedOptions: () => ({ timeZone: "UTC" })
+    })
+  };
+  window.fetch = () => Promise.resolve({ json: () => Promise.resolve({}) });
+
+  try {
+    // Mock active selection
+    window.getSelection = () => ({
+      toString: () => "but of the tree"
+    });
+
+    await loadApp(window);
+
+    const verseSpan = document.querySelector('[data-ref="01002017"]');
+    verseSpan.dispatchEvent(new window.Event("click", { bubbles: true, cancelable: true }));
+
+    assertEquals(verseSpan.classList.contains("verse-selected"), false, "Verse should NOT be highlighted when text was selected");
+  } finally {
+    delete window.getSelection;
+  }
+});
+
 Deno.test("export modal - method change logic", { sanitizeOps: false, sanitizeResources: false }, async () => {
   const html = `
     <!DOCTYPE html>
