@@ -118,9 +118,53 @@ func (s *Store) GetSOAPDataRange(ctx context.Context, userID int64, startDate st
 	return entries, nil
 }
 
+// GetSOAPDatesWithEntries retrieves dates within the given date range that have non-empty journal entries for a user.
+func (s *Store) GetSOAPDatesWithEntries(ctx context.Context, userID int64, startDate string, endDate string) ([]string, error) {
+	query := `SELECT date
+			  FROM journal
+			  WHERE user_id = ? AND date >= ? AND date <= ?
+			    AND (
+			        TRIM(observation) != '' OR
+			        TRIM(application) != '' OR
+			        TRIM(prayer) != '' OR
+			        (selected_verses IS NOT NULL AND
+			         CAST(selected_verses AS TEXT) != '[]' AND
+			         CAST(selected_verses AS TEXT) != 'null' AND
+			         CAST(selected_verses AS TEXT) != '')
+			    )
+			  ORDER BY date ASC`
+	rows, err := s.db.QueryContext(ctx, query, userID, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("querying SOAP dates with entries: %w", err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	var dates []string
+	for rows.Next() {
+		var d string
+		if err := rows.Scan(&d); err != nil {
+			return nil, fmt.Errorf("scanning SOAP date row: %w", err)
+		}
+		dates = append(dates, d)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error in SOAP dates: %w", err)
+	}
+	if dates == nil {
+		dates = []string{}
+	}
+	return dates, nil
+}
+
 // SaveSOAPData saves SOAP data to the database.
 func (s *Store) SaveSOAPData(ctx context.Context, userID int64, soapData *store.SOAPData) error {
-	selectedVersesJSON, err := json.Marshal(soapData.SelectedVerses)
+	verses := soapData.SelectedVerses
+	if verses == nil {
+		verses = []string{}
+	}
+	selectedVersesJSON, err := json.Marshal(verses)
 	if err != nil {
 		return fmt.Errorf("JSON marshaling selected verses: %w", err)
 	}
@@ -135,7 +179,7 @@ func (s *Store) SaveSOAPData(ctx context.Context, userID int64, soapData *store.
 			selected_verses = excluded.selected_verses,
 			timestamp = CURRENT_TIMESTAMP
 	`
-	_, err = s.db.ExecContext(ctx, query, userID, soapData.Date, soapData.Observation, soapData.Application, soapData.Prayer, selectedVersesJSON)
+	_, err = s.db.ExecContext(ctx, query, userID, soapData.Date, soapData.Observation, soapData.Application, soapData.Prayer, string(selectedVersesJSON))
 	if err != nil {
 		return fmt.Errorf("saving SOAP data: %w", err)
 	}

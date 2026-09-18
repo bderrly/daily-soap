@@ -47,6 +47,8 @@ func newHTMLRenderer(templateFS fs.FS, sharedTemplateFiles ...string) (*htmlRend
 
 // render clones the shared template set, optionally parses additional templates,
 // executes the named template with the supplied data, and writes the response.
+//
+//nolint:unparam // status allows callers to specify HTTP status code
 func (h *htmlRenderer) render(w http.ResponseWriter, status int, data any, templateName string, additionalTemplateFiles ...string) error {
 	ts, err := h.sharedTemplates.Clone()
 	if err != nil {

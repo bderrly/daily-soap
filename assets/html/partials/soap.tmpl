@@ -19,7 +19,7 @@
     <div class="soap-field">
         <label for="date-picker">Date</label>
         <div class="soap-actions">
-            <input type="date" id="date-picker" name="date" value="{{.date}}" hx-get="/"
+            <input type="text" id="date-picker" name="date" value="{{.date}}" hx-get="/"
                 hx-target="#content-container" hx-swap="outerHTML" hx-trigger="change-date" hx-include="this" hx-push-url="true">
             <button type="button" id="share-btn" class="share-btn">Share</button>
         </div>

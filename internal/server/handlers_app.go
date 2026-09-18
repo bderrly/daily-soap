@@ -131,6 +131,54 @@ func (app *application) getSoap(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// getSoapDates retrieves dates with journal entries for a user within +- 3 months of the requested month.
+func (app *application) getSoapDates(w http.ResponseWriter, r *http.Request) {
+	user := r.Context().Value(userContextKey).(*store.User)
+
+	loc, err := time.LoadLocation(user.Timezone)
+	if err != nil {
+		slog.Error("failed to load user location", "timezone", user.Timezone, "error", err)
+		loc = time.UTC
+	}
+
+	var refDate time.Time
+	monthParam := r.URL.Query().Get("month")
+	dateParam := r.URL.Query().Get("date")
+
+	if monthParam != "" {
+		t, parseErr := time.ParseInLocation("2006-01", monthParam, loc)
+		if parseErr == nil {
+			refDate = t
+		}
+	} else if dateParam != "" {
+		t, parseErr := time.ParseInLocation(time.DateOnly, dateParam, loc)
+		if parseErr == nil {
+			refDate = t
+		}
+	}
+	if refDate.IsZero() {
+		refDate = time.Now().In(loc)
+	}
+
+	firstOfMonth := time.Date(refDate.Year(), refDate.Month(), 1, 0, 0, 0, 0, loc)
+	startDate := firstOfMonth.AddDate(0, -3, 0).Format(time.DateOnly)
+	endDate := firstOfMonth.AddDate(0, 4, 0).AddDate(0, 0, -1).Format(time.DateOnly)
+
+	dates, err := app.store.GetSOAPDatesWithEntries(r.Context(), user.ID, startDate, endDate)
+	if err != nil {
+		slog.Error("failed to get SOAP dates with entries", "error", err, "userID", user.ID)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]any{"dates": dates}); err != nil {
+		slog.Error("failed to encode SOAP dates", "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+}
+
 // postSoap saves SOAP data.
 func (app *application) postSoap(w http.ResponseWriter, r *http.Request) {
 	user := r.Context().Value(userContextKey).(*store.User)

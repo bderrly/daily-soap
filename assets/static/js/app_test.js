@@ -464,3 +464,74 @@ Deno.test("initial load - date parameter in URL", { sanitizeOps: false, sanitize
   assertExists(datePicker, "Date picker should exist");
   assertEquals(datePicker.value, "2026-06-20", "Date picker value should be updated to match URL query parameter");
 });
+
+Deno.test("flatpickr initialization and entry encircling", { sanitizeOps: false, sanitizeResources: false }, async () => {
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <body>
+        <div class="content-wrapper" id="content-container" data-date="2026-06-20" data-selected-verses="[]">
+          <div id="selectedVersesReference"></div>
+          <textarea id="observation"></textarea>
+          <textarea id="application"></textarea>
+          <textarea id="prayer"></textarea>
+          <div id="saveStatus"></div>
+          <input type="text" id="date-picker" value="2026-06-20">
+        </div>
+      </body>
+    </html>
+  `;
+
+  const { window, document, Node } = parseHTML(html);
+
+  window.Node = Node;
+  window.SOAP_DATA = {
+    csrfToken: "test-token"
+  };
+  window.Intl = {
+    DateTimeFormat: () => ({
+      resolvedOptions: () => ({ timeZone: "UTC" })
+    })
+  };
+
+  // Mock fetch to return dates with entries
+  window.fetch = (url) => {
+    if (typeof url === 'string' && url.includes('/soap/dates')) {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ dates: ["2026-06-15", "2026-06-20"] })
+      });
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({ status: "success" }) });
+  };
+
+  let capturedConfig = null;
+  window.flatpickr = (element, config) => {
+    capturedConfig = config;
+    return {
+      redraw: () => {},
+      destroy: () => {}
+    };
+  };
+
+  await loadApp(window);
+
+  assertExists(capturedConfig, "Flatpickr should have been initialized with config");
+  assertEquals(capturedConfig.dateFormat, "Y-m-d");
+
+  // Wait a tick for loadEntryDatesForMonth fetch to resolve
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  // Test onDayCreate with a date that has an entry
+  const dayElemWithEntry = document.createElement("span");
+  dayElemWithEntry.dateObj = new Date(2026, 5, 15); // June 15, 2026
+  capturedConfig.onDayCreate(null, null, null, dayElemWithEntry);
+  assertEquals(dayElemWithEntry.classList.contains("has-journal-entry"), true, "Should have has-journal-entry class");
+
+  // Test onDayCreate with a date without an entry
+  const dayElemNoEntry = document.createElement("span");
+  dayElemNoEntry.dateObj = new Date(2026, 5, 16); // June 16, 2026
+  capturedConfig.onDayCreate(null, null, null, dayElemNoEntry);
+  assertEquals(dayElemNoEntry.classList.contains("has-journal-entry"), false, "Should not have has-journal-entry class");
+});
+

@@ -27,6 +27,13 @@ func (m *mockStore) SaveCachedESV(_ context.Context, _ string, _ string) error {
 	return nil
 }
 
+func (m *mockStore) GetSOAPDatesWithEntries(_ context.Context, _ int64, startDate string, endDate string) ([]string, error) {
+	if startDate == "2026-02-01" && endDate == "2026-08-31" {
+		return []string{"2026-05-01", "2026-05-02"}, nil
+	}
+	return []string{}, nil
+}
+
 func TestHandleIndex_DateQueryParam_Verification(t *testing.T) {
 	app := newTestApplication(t, &mockStore{})
 
@@ -87,4 +94,43 @@ func TestHandleIndex_DateQueryParam_Verification(t *testing.T) {
 	if !strings.Contains(body, `id="content-container"`) {
 		t.Errorf("expected HTMX response to contain content-container, but it didn't")
 	}
+}
+
+func TestGetSoapDates(t *testing.T) {
+	app := newTestApplication(t, &mockStore{})
+
+	user := &store.User{
+		ID:       1,
+		Email:    "test@example.com",
+		Timezone: "UTC",
+	}
+	ctx := context.WithValue(context.Background(), userContextKey, user)
+
+	t.Run("by month query param", func(t *testing.T) {
+		req, _ := http.NewRequestWithContext(ctx, "GET", "/soap/dates?month=2026-05", nil)
+		rr := httptest.NewRecorder()
+		app.getSoapDates(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected status OK, got %d. Body: %s", rr.Code, rr.Body.String())
+		}
+		expected := `{"dates":["2026-05-01","2026-05-02"]}`
+		if strings.TrimSpace(rr.Body.String()) != expected {
+			t.Errorf("expected %s, got %s", expected, strings.TrimSpace(rr.Body.String()))
+		}
+	})
+
+	t.Run("by date query param", func(t *testing.T) {
+		req, _ := http.NewRequestWithContext(ctx, "GET", "/soap/dates?date=2026-05-15", nil)
+		rr := httptest.NewRecorder()
+		app.getSoapDates(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected status OK, got %d. Body: %s", rr.Code, rr.Body.String())
+		}
+		expected := `{"dates":["2026-05-01","2026-05-02"]}`
+		if strings.TrimSpace(rr.Body.String()) != expected {
+			t.Errorf("expected %s, got %s", expected, strings.TrimSpace(rr.Body.String()))
+		}
+	})
 }

@@ -63,6 +63,7 @@ func (app *application) Routes() http.Handler {
 	// Protected routes
 	mux.HandleFunc("/", app.authMiddleware(app.home))
 	mux.HandleFunc("GET /soap", app.authMiddleware(app.getSoap))
+	mux.HandleFunc("GET /soap/dates", app.authMiddleware(app.getSoapDates))
 	mux.HandleFunc("POST /soap", app.authMiddleware(app.postSoap))
 	mux.HandleFunc("GET /export", app.authMiddleware(app.export))
 	mux.HandleFunc("/history", app.authMiddleware(app.history))

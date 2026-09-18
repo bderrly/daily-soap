@@ -193,6 +193,61 @@ func TestStore_SaveSOAPData(t *testing.T) {
 	}
 }
 
+func TestStore_GetSOAPDatesWithEntries(t *testing.T) {
+	db := setupTestDB(t)
+	s := New(db)
+	ctx := context.Background()
+
+	_, err := db.Exec("INSERT INTO users (id, email, password_hash, verified_at) VALUES (1, 'user1@example.com', 'hash', CURRENT_TIMESTAMP), (2, 'user2@example.com', 'hash', CURRENT_TIMESTAMP)")
+	if err != nil {
+		t.Fatalf("failed to insert users: %v", err)
+	}
+
+	entries := []struct {
+		userID         int64
+		date           string
+		observation    string
+		application    string
+		prayer         string
+		selectedVerses []string
+	}{
+		{userID: 1, date: "2026-03-01", observation: "Obs 1", application: "App 1", prayer: "Pray 1"},
+		{userID: 1, date: "2026-04-15", observation: "   ", application: "", prayer: ""},                                    // Empty/whitespace
+		{userID: 1, date: "2026-05-20", observation: "", application: "", prayer: "", selectedVerses: []string{"01001001"}}, // Only verses
+		{userID: 1, date: "2026-06-10", observation: "", application: "App only", prayer: ""},
+		{userID: 1, date: "2026-09-01", observation: "Future entry", application: "", prayer: ""}, // Outside range
+		{userID: 2, date: "2026-03-01", observation: "User 2 entry", application: "", prayer: ""}, // Other user
+	}
+
+	for _, e := range entries {
+		err := s.SaveSOAPData(ctx, e.userID, &store.SOAPData{
+			Date:           e.date,
+			Observation:    e.observation,
+			Application:    e.application,
+			Prayer:         e.prayer,
+			SelectedVerses: e.selectedVerses,
+		})
+		if err != nil {
+			t.Fatalf("failed to save soap data for %s: %v", e.date, err)
+		}
+	}
+
+	dates, err := s.GetSOAPDatesWithEntries(ctx, 1, "2026-03-01", "2026-06-30")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	expected := []string{"2026-03-01", "2026-05-20", "2026-06-10"}
+	if len(dates) != len(expected) {
+		t.Fatalf("expected %d dates, got %d: %v", len(expected), len(dates), dates)
+	}
+	for i, d := range expected {
+		if dates[i] != d {
+			t.Errorf("expected date[%d] = %s, got %s", i, d, dates[i])
+		}
+	}
+}
+
 func TestStore_UserOperations(t *testing.T) {
 	db := setupTestDB(t)
 	s := New(db)

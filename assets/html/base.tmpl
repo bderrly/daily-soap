@@ -22,10 +22,12 @@
         >
 
         <link rel="icon" type="image/png" href="/static/images/favicon.png">
+        <link rel="stylesheet" href="/static/css/flatpickr.min.css">
         <link rel="stylesheet" href="/static/css/mysoaps.css">
         {{if .CustomStylesheet}}
         <link rel="stylesheet" href="/static/css/{{.CustomStylesheet}}">
         {{end}}
+        <script defer src="/static/js/flatpickr.min.js" nonce="{{.Nonce}}"></script>
         <script defer src="/static/js/htmx.min.js" nonce="{{.Nonce}}"></script>
         <script type="module" src="/static/js/app.js" nonce="{{.Nonce}}"></script>
     </head>

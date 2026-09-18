@@ -848,3 +848,41 @@ p:not(.line) {
     }
 }
 
+/* Flatpickr Theme & Journal Entry Styling */
+#date-picker {
+    cursor: pointer;
+}
+
+.flatpickr-calendar {
+    background: var(--white);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-family: inherit;
+}
+
+.flatpickr-day {
+    border-radius: 50%;
+}
+
+.flatpickr-day.has-journal-entry {
+    background-color: var(--bg-highlight) !important;
+    border: 2px solid var(--secondary-color) !important;
+    border-radius: 50% !important;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.flatpickr-day.has-journal-entry:hover {
+    background-color: var(--bg-selected) !important;
+    border-color: var(--primary-color) !important;
+}
+
+.flatpickr-day.selected,
+.flatpickr-day.has-journal-entry.selected {
+    background-color: var(--primary-color) !important;
+    border-color: var(--primary-color) !important;
+    color: var(--white) !important;
+}
+
+

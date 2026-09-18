@@ -152,13 +152,97 @@ function handleVerseClick(e) {
     }
 }
 
-function init() {
-    if (currentDate) {
-        const datePicker = document.getElementById('date-picker');
-        if (datePicker && datePicker.value !== currentDate) {
-            datePicker.value = currentDate;
+const cachedEntryDates = new Set();
+const fetchedMonths = new Set();
+let fpInstance = null;
+let isChangingDate = false;
+
+async function loadEntryDatesForMonth(monthStr, fp) {
+    if (fetchedMonths.has(monthStr)) return;
+    try {
+        const res = await fetch(`/soap/dates?month=${encodeURIComponent(monthStr)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const dates = Array.isArray(data) ? data : (data.dates || []);
+        dates.forEach(d => cachedEntryDates.add(d));
+        fetchedMonths.add(monthStr);
+        if (fp) {
+            fp.redraw();
         }
+    } catch (err) {
+        console.error('Failed to load entry dates:', err);
     }
+}
+
+async function handleDateChange(newDate) {
+    if (isChangingDate) return;
+    if (!newDate || newDate === currentDate) return;
+
+    isChangingDate = true;
+    try {
+        const datePicker = document.getElementById('date-picker');
+        if (currentDate) {
+            await saveData(true);
+        }
+        if (datePicker) {
+            datePicker.value = newDate;
+            datePicker.dispatchEvent(new CustomEvent('change-date'));
+        }
+    } finally {
+        isChangingDate = false;
+    }
+}
+
+function initDatePicker() {
+    const datePicker = document.getElementById('date-picker');
+    if (!datePicker) return;
+
+    if (currentDate && datePicker.value !== currentDate) {
+        datePicker.value = currentDate;
+    }
+
+    if (typeof window !== 'undefined' && typeof window.flatpickr === 'function') {
+        if (fpInstance) {
+            fpInstance.destroy();
+            fpInstance = null;
+        }
+
+        fpInstance = window.flatpickr(datePicker, {
+            defaultDate: currentDate || 'today',
+            dateFormat: 'Y-m-d',
+            allowInput: false,
+            onDayCreate: function (dObj, dStr, fp, dayElem) {
+                const y = dayElem.dateObj.getFullYear();
+                const m = String(dayElem.dateObj.getMonth() + 1).padStart(2, '0');
+                const d = String(dayElem.dateObj.getDate()).padStart(2, '0');
+                const dateStr = `${y}-${m}-${d}`;
+                if (cachedEntryDates.has(dateStr)) {
+                    dayElem.classList.add('has-journal-entry');
+                }
+            },
+            onMonthChange: async function (selectedDates, dateStr, instance) {
+                const y = instance.currentYear;
+                const m = String(instance.currentMonth + 1).padStart(2, '0');
+                await loadEntryDatesForMonth(`${y}-${m}`, instance);
+            },
+            onYearChange: async function (selectedDates, dateStr, instance) {
+                const y = instance.currentYear;
+                const m = String(instance.currentMonth + 1).padStart(2, '0');
+                await loadEntryDatesForMonth(`${y}-${m}`, instance);
+            },
+            onChange: async function (selectedDates, dateStr) {
+                await handleDateChange(dateStr);
+            }
+        });
+
+        const activeDate = currentDate || new Date().toISOString().substring(0, 10);
+        const monthStr = activeDate.substring(0, 7);
+        loadEntryDatesForMonth(monthStr, fpInstance);
+    }
+}
+
+function init() {
+    initDatePicker();
     refreshHighlights();
 }
 
@@ -269,6 +353,7 @@ document.body.addEventListener('htmx:afterSwap', function (evt) {
             selectedVerseIds = window.SOAP_DATA.selectedVerses || [];
         }
         refreshHighlights();
+        initDatePicker();
     }
 });
 
@@ -366,17 +451,7 @@ document.body.addEventListener('click', function (e) {
 // Handle date changes using body-level event delegation
 document.body.addEventListener('change', async function (e) {
     if (e.target.id === 'date-picker') {
-        const datePicker = e.target;
-        const newDate = datePicker.value;
-        if (newDate === currentDate) return;
-
-        // 1. Save data for the OLD date (currentDate)
-        if (currentDate) {
-            await saveData(true);
-        }
-
-        // 2. Trigger HTMX request
-        datePicker.dispatchEvent(new CustomEvent('change-date'));
+        await handleDateChange(e.target.value);
     }
 });
 
@@ -431,6 +506,17 @@ function saveData(immediate = false) {
                     saveStatus.className = 'save-status error';
                 }
             } else {
+                const hasContent = (observationField?.value.trim() || '') !== '' ||
+                    (applicationField?.value.trim() || '') !== '' ||
+                    (prayerField?.value.trim() || '') !== '' ||
+                    selectedVerseIds.length > 0;
+                if (hasContent && currentDate) {
+                    cachedEntryDates.add(currentDate);
+                    if (fpInstance) {
+                        fpInstance.redraw();
+                    }
+                }
+
                 if (saveStatus) {
                     saveStatus.textContent = 'Saved';
                     saveStatus.className = 'save-status saved';

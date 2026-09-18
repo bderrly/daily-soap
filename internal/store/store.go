@@ -90,6 +90,8 @@ type Store interface {
 	UpdateUserPasswordHash(ctx context.Context, userID int64, newHash string) error
 	UpdateUserTimezone(ctx context.Context, userID int64, timezone string) error
 	GetSOAPDataRange(ctx context.Context, userID int64, startDate string, endDate string) ([]*SOAPData, error)
+	// GetSOAPDatesWithEntries retrieves dates within the given date range that have non-empty journal entries for a user.
+	GetSOAPDatesWithEntries(ctx context.Context, userID int64, startDate string, endDate string) ([]string, error)
 	// GetAdminStats retrieves user administration and metric statistics.
 	GetAdminStats(ctx context.Context) (*AdminStats, error)
 	// GetAdminUserDirectory retrieves the list of users for the administrator directory.
