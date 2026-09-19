@@ -210,6 +210,7 @@ function initDatePicker() {
         fpInstance = window.flatpickr(datePicker, {
             defaultDate: currentDate || 'today',
             dateFormat: 'Y-m-d',
+            minDate: '2026-01-01',
             allowInput: false,
             onDayCreate: function (dObj, dStr, fp, dayElem) {
                 const y = dayElem.dateObj.getFullYear();

@@ -518,6 +518,7 @@ Deno.test("flatpickr initialization and entry encircling", { sanitizeOps: false,
 
   assertExists(capturedConfig, "Flatpickr should have been initialized with config");
   assertEquals(capturedConfig.dateFormat, "Y-m-d");
+  assertEquals(capturedConfig.minDate, "2026-01-01");
 
   // Wait a tick for loadEntryDatesForMonth fetch to resolve
   await new Promise((resolve) => setTimeout(resolve, 50));
