@@ -96,6 +96,10 @@ func TestHandleIndex_DateQueryParam_Verification(t *testing.T) {
 	}
 }
 
+func (m *mockStore) GetSOAPDataRange(_ context.Context, _ int64, _, _ string) ([]*store.SOAPData, error) {
+	return []*store.SOAPData{}, nil
+}
+
 func TestGetSoapDates(t *testing.T) {
 	app := newTestApplication(t, &mockStore{})
 
@@ -131,6 +135,61 @@ func TestGetSoapDates(t *testing.T) {
 		expected := `{"dates":["2026-05-01","2026-05-02"]}`
 		if strings.TrimSpace(rr.Body.String()) != expected {
 			t.Errorf("expected %s, got %s", expected, strings.TrimSpace(rr.Body.String()))
+		}
+	})
+}
+
+func TestHeaderNavigationAndTitleLinks(t *testing.T) {
+	app := newTestApplication(t, &mockStore{})
+
+	user := &store.User{
+		ID:       1,
+		Email:    "test@example.com",
+		Timezone: "UTC",
+	}
+	ctx := context.WithValue(context.Background(), userContextKey, user)
+	ctx = context.WithValue(ctx, csrfContextKey, "test-csrf")
+	ctx = context.WithValue(ctx, nonceContextKey, "test-nonce")
+
+	t.Run("home page header navigation and title link", func(t *testing.T) {
+		req, _ := http.NewRequestWithContext(ctx, "GET", "/?date=2026-05-07", nil)
+		rr := httptest.NewRecorder()
+		app.home(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected status OK, got %d", rr.Code)
+		}
+
+		body := rr.Body.String()
+		expectedTitleLink := `<h1 class="header-title"><a href="/">Daily Reading + SOAP</a></h1>`
+		if !strings.Contains(body, expectedTitleLink) {
+			t.Errorf("expected body to contain title link %q, but got: %s", expectedTitleLink, body)
+		}
+
+		expectedNav := `<a href="/history" class="nav-link history-btn">History</a>`
+		if !strings.Contains(body, expectedNav) {
+			t.Errorf("expected home page to contain nav link %q, but got: %s", expectedNav, body)
+		}
+	})
+
+	t.Run("history page header navigation and title link", func(t *testing.T) {
+		req, _ := http.NewRequestWithContext(ctx, "GET", "/history", nil)
+		rr := httptest.NewRecorder()
+		app.history(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected status OK, got %d", rr.Code)
+		}
+
+		body := rr.Body.String()
+		expectedTitleLink := `<h1 class="header-title"><a href="/">Daily Reading + SOAP</a></h1>`
+		if !strings.Contains(body, expectedTitleLink) {
+			t.Errorf("expected body to contain title link %q, but got: %s", expectedTitleLink, body)
+		}
+
+		expectedNav := `<a href="/" class="nav-link history-btn">Back to Today</a>`
+		if !strings.Contains(body, expectedNav) {
+			t.Errorf("expected history page to contain nav link %q, but got: %s", expectedNav, body)
 		}
 	})
 }

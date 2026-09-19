@@ -2,11 +2,15 @@
 <div class="header-controls">
     <div class="header-brand">
         <a href="/"><img src="/static/images/bible.svg" class="logo" alt="Bible Logo"></a>
-        <h1 class="header-title">Daily Reading + SOAP</h1>
+        <h1 class="header-title"><a href="/">Daily Reading + SOAP</a></h1>
     </div>
     {{if .user}}
     <div>
+        {{if .IsHistory}}
+        <a href="/" class="nav-link history-btn">Back to Today</a>
+        {{else}}
         <a href="/history" class="nav-link history-btn">History</a>
+        {{end}}
         {{if .user.IsAdmin}}
         <a href="/admin" class="nav-link admin-btn">Admin</a>
         {{end}}

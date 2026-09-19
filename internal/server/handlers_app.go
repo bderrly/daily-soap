@@ -412,6 +412,7 @@ func (app *application) history(w http.ResponseWriter, r *http.Request) {
 		"PrevEndDate": prevEndDate.Format(time.DateOnly),
 		"NextEndDate": nextEndDate.Format(time.DateOnly),
 		"ShowNext":    nextEndDate.After(endDate) || endDate.Format(time.DateOnly) != time.Now().In(loc).Format(time.DateOnly),
+		"IsHistory":   true,
 		"user":        user,
 		"CSRFToken":   r.Context().Value(csrfContextKey).(string),
 		"Nonce":       r.Context().Value(nonceContextKey).(string),
