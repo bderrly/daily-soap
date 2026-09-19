@@ -706,6 +706,7 @@ p:not(.line) {
     background: var(--white);
     border-radius: 8px;
     color: var(--text-secondary);
+    margin-bottom: 20px;
 }
 
 .history-entry {

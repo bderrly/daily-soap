@@ -191,5 +191,16 @@ func TestHeaderNavigationAndTitleLinks(t *testing.T) {
 		if !strings.Contains(body, expectedNav) {
 			t.Errorf("expected history page to contain nav link %q, but got: %s", expectedNav, body)
 		}
+
+		// Verify that "Previous" and "Next" navigation buttons appear twice (top and bottom).
+		prevCount := strings.Count(body, "Previous 7 Days")
+		if prevCount != 2 {
+			t.Errorf("expected 2 'Previous 7 Days' occurrences (top and bottom), got %d", prevCount)
+		}
+
+		nextCount := strings.Count(body, "Next 7 Days")
+		if nextCount != 2 {
+			t.Errorf("expected 2 'Next 7 Days' occurrences (top and bottom), got %d", nextCount)
+		}
 	})
 }

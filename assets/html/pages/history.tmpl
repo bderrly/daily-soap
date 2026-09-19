@@ -78,4 +78,18 @@
             {{end}}
         {{end}}
     </div>
+
+    <div class="history-controls">
+        <div>
+            <a href="/history?end_date={{.PrevEndDate}}&days={{.Days}}" class="nav-btn">&larr; Previous {{.Days}} Days</a>
+        </div>
+
+        <div>
+            {{if .ShowNext}}
+            <a href="/history?end_date={{.NextEndDate}}&days={{.Days}}" class="nav-btn">Next {{.Days}} Days &rarr;</a>
+            {{else}}
+            <span class="nav-btn-disabled">Next {{.Days}} Days &rarr;</span>
+            {{end}}
+        </div>
+    </div>
 {{end}}
