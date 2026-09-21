@@ -66,6 +66,7 @@ func (app *application) Routes() http.Handler {
 	mux.HandleFunc("GET /soap/dates", app.authMiddleware(app.getSoapDates))
 	mux.HandleFunc("POST /soap", app.authMiddleware(app.postSoap))
 	mux.HandleFunc("GET /export", app.authMiddleware(app.export))
+	mux.HandleFunc("POST /translation", app.authMiddleware(app.postTranslation))
 	mux.HandleFunc("/history", app.authMiddleware(app.history))
 	mux.HandleFunc("/admin", app.authMiddleware(adminMiddleware(app.admin)))
 
@@ -85,8 +86,8 @@ func securityMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 
-		// Content Security Policy with Nonce.
-		csp := fmt.Sprintf("default-src 'self'; script-src 'self' 'nonce-%s'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'; upgrade-insecure-requests;", nonce)
+		// Content Security Policy with Nonce and FUMS connect-src / img-src permissions.
+		csp := fmt.Sprintf("default-src 'self'; script-src 'self' 'nonce-%s'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://fums.api.bible; connect-src 'self' https://fums.api.bible; font-src 'self'; frame-ancestors 'none'; upgrade-insecure-requests;", nonce)
 		w.Header().Set("Content-Security-Policy", csp)
 
 		next.ServeHTTP(w, r.WithContext(ctx))

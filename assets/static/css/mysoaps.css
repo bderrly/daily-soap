@@ -793,6 +793,7 @@ p:not(.line) {
     .verses-section {
         height: 100%;
         overflow-y: auto;
+        scrollbar-gutter: stable;
     }
 
     .soap-section {
@@ -889,5 +890,87 @@ p:not(.line) {
     border-color: var(--primary-color) !important;
     color: var(--white) !important;
 }
+
+/* Reading header & translation selector */
+.reading-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.25rem;
+    gap: 1rem;
+    flex-wrap: wrap;
+    padding-right: 0.75rem;
+}
+
+.reading-header h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    color: var(--text-primary);
+}
+
+.translation-selector {
+    display: flex;
+    align-items: center;
+}
+
+.translation-select {
+    padding: 0.35rem 0.65rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background-color: var(--bg-light);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.translation-select:hover {
+    border-color: var(--secondary-color);
+}
+
+.translation-select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    background-color: var(--white);
+}
+
+/* Scripture content uniform styling across ESV and API.Bible */
+.verse-content p {
+    margin-bottom: 0.9rem;
+    line-height: 1.7;
+}
+
+.verse-content .s,
+.verse-content .s1,
+.verse-content .s2,
+.verse-content .s3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    margin-top: 1.25rem;
+    margin-bottom: 0.5rem;
+    text-align: left;
+    font-style: normal;
+}
+
+.verse-content .q,
+.verse-content .q1 {
+    padding-left: 1.5rem;
+    margin-bottom: 0.3rem;
+    line-height: 1.7;
+}
+
+.verse-content .q2 {
+    padding-left: 2.5rem;
+    margin-bottom: 0.3rem;
+    line-height: 1.7;
+}
+
+.verse-content .m {
+    text-indent: 0;
+}
+
 
 

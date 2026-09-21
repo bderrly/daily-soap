@@ -8,12 +8,13 @@ import (
 
 // User represents a system user.
 type User struct {
-	ID         int64
-	Email      string
-	Timezone   string
-	IsAdmin    bool
-	CreatedAt  time.Time
-	VerifiedAt *time.Time
+	ID          int64
+	Email       string
+	Timezone    string
+	Translation string
+	IsAdmin     bool
+	CreatedAt   time.Time
+	VerifiedAt  *time.Time
 }
 
 // IsVerified returns true if the user's email has been verified.
@@ -76,6 +77,7 @@ type Store interface {
 	ExpungeCache(ctx context.Context, olderThan time.Duration, keepMax int) error
 	GetAuthUser(ctx context.Context, email string) (id int64, passwordHash string, isVerified bool, timezone string, err error)
 	GetCachedESV(ctx context.Context, key string) (string, error)
+	GetCachedScripture(ctx context.Context, key string) (string, error)
 	GetPasswordResetToken(ctx context.Context, token string) (int64, time.Time, error) // returns userID, expiresAt
 	GetPendingEmails(ctx context.Context, limit int) ([]*QueuedEmail, error)
 	GetSOAPData(ctx context.Context, userID int64, dateStr string) (*SOAPData, error)
@@ -84,11 +86,13 @@ type Store interface {
 	MarkEmailSent(ctx context.Context, id int64) error
 	QueueEmail(ctx context.Context, email *QueuedEmail) error
 	SaveCachedESV(ctx context.Context, key string, content string) error
+	SaveCachedScripture(ctx context.Context, key string, content string) error
 	SaveSOAPData(ctx context.Context, userID int64, soapData *SOAPData) error
 	UpdateEmailStatus(ctx context.Context, id int64, status string, nextAttempt *time.Time) error
 	UpdateUserPassword(ctx context.Context, userID int64, passwordHash string) error
 	UpdateUserPasswordHash(ctx context.Context, userID int64, newHash string) error
 	UpdateUserTimezone(ctx context.Context, userID int64, timezone string) error
+	UpdateUserTranslation(ctx context.Context, userID int64, translation string) error
 	GetSOAPDataRange(ctx context.Context, userID int64, startDate string, endDate string) ([]*SOAPData, error)
 	// GetSOAPDatesWithEntries retrieves dates within the given date range that have non-empty journal entries for a user.
 	GetSOAPDatesWithEntries(ctx context.Context, userID int64, startDate string, endDate string) ([]string, error)

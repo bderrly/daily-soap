@@ -1,6 +1,7 @@
 [tools]
 deno = "2.9.7"
 "github:bokwoon95/wgo" = "v0.7.1"
+"github:pressly/goose" = "v3.28.0"
 go = "1.25"
 gofumpt = "v0.12.0"
 golangci-lint = "v2.13.2"
@@ -22,6 +23,7 @@ description = "Download vendored frontend libraries"
 run = """
 curl -sLo assets/static/js/flatpickr.min.js https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js
 curl -sLo assets/static/css/flatpickr.min.css https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css
+curl -sLo assets/static/js/fumsV3.min.js https://pkg.api.bible/fumsV3.min.js
 """
 
 [tasks.dev]
@@ -33,6 +35,6 @@ if ! pgrep -f "wgo run .* ./cmd/server" > /dev/null; then
 fi
 
 echo "Starting server..."
-CGO_ENABLED=1 wgo run -file .css -file .html -file .gotmpl -file .js ./cmd/server
+CGO_ENABLED=1 wgo run -file .go -file .css -file .html -file .gotmpl -file .js ./cmd/server
 """
 

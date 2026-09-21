@@ -29,6 +29,16 @@
         {{end}}
         <script defer src="/static/js/flatpickr.min.js" nonce="{{.Nonce}}"></script>
         <script defer src="/static/js/htmx.min.js" nonce="{{.Nonce}}"></script>
+        <script defer src="/static/js/fumsV3.min.js" nonce="{{.Nonce}}"></script>
+        <script nonce="{{.Nonce}}">
+            window.fumsData = window.fumsData || [];
+            window.fums = window.fums || function () {
+                window.fumsData.push(arguments);
+            };
+            {{if .user}}
+            window.fums("config", { userId: "{{.user.ID}}" });
+            {{end}}
+        </script>
         <script type="module" src="/static/js/app.js" nonce="{{.Nonce}}"></script>
     </head>
     <body>

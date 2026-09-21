@@ -34,12 +34,12 @@ func (s *Store) GetUserFromSession(ctx context.Context, token string) (*store.Us
 	var verifiedAt sql.NullTime
 
 	query := `
-		SELECT u.id, u.email, u.timezone, u.is_admin, u.created_at, u.verified_at, s.expires_at
+		SELECT u.id, u.email, u.timezone, u.translation, u.is_admin, u.created_at, u.verified_at, s.expires_at
 		FROM sessions s
 		JOIN users u ON s.user_id = u.id
 		WHERE s.token = ?`
 
-	err := s.db.QueryRowContext(ctx, query, token).Scan(&user.ID, &user.Email, &user.Timezone, &user.IsAdmin, &user.CreatedAt, &verifiedAt, &expiresAt)
+	err := s.db.QueryRowContext(ctx, query, token).Scan(&user.ID, &user.Email, &user.Timezone, &user.Translation, &user.IsAdmin, &user.CreatedAt, &verifiedAt, &expiresAt)
 	if err != nil {
 		return nil, fmt.Errorf("getting user from session: %w", err)
 	}
@@ -236,7 +236,7 @@ func (s *Store) ConfirmUser(ctx context.Context, token string) (int64, string, e
 func (s *Store) GetUserByEmail(ctx context.Context, email string) (*store.User, error) {
 	var user store.User
 	var verifiedAt sql.NullTime
-	err := s.db.QueryRowContext(ctx, "SELECT id, email, timezone, is_admin, created_at, verified_at FROM users WHERE email = ?", email).Scan(&user.ID, &user.Email, &user.Timezone, &user.IsAdmin, &user.CreatedAt, &verifiedAt)
+	err := s.db.QueryRowContext(ctx, "SELECT id, email, timezone, translation, is_admin, created_at, verified_at FROM users WHERE email = ?", email).Scan(&user.ID, &user.Email, &user.Timezone, &user.Translation, &user.IsAdmin, &user.CreatedAt, &verifiedAt)
 	if err != nil {
 		return nil, fmt.Errorf("getting user by email: %w", err)
 	}
@@ -244,6 +244,15 @@ func (s *Store) GetUserByEmail(ctx context.Context, email string) (*store.User, 
 		user.VerifiedAt = &verifiedAt.Time
 	}
 	return &user, nil
+}
+
+// UpdateUserTranslation updates a user's preferred Bible translation.
+func (s *Store) UpdateUserTranslation(ctx context.Context, userID int64, translation string) error {
+	_, err := s.db.ExecContext(ctx, "UPDATE users SET translation = ? WHERE id = ?", translation, userID)
+	if err != nil {
+		return fmt.Errorf("updating user translation: %w", err)
+	}
+	return nil
 }
 
 // CreatePasswordResetToken saves a password reset token.
@@ -318,61 +327,69 @@ func (s *Store) DeleteExpiredSessions(ctx context.Context) error {
 	return nil
 }
 
-// ExpungeCache removes old and excess entries from the esv_cache table.
+// ExpungeCache removes old and excess entries from the scripture_cache table.
 func (s *Store) ExpungeCache(ctx context.Context, olderThan time.Duration, keepMax int) error {
-	// The terms of use for api.esv.org requires keeping no more than 500 passages and for none for longer than 30 days.
-
-	// Time-based purge
+	// Purge entries older than the cutoff duration.
 	cutoff := time.Now().Add(-olderThan)
-	_, err := s.db.ExecContext(ctx, "DELETE FROM esv_cache WHERE created_at < ?", cutoff)
+	_, err := s.db.ExecContext(ctx, "DELETE FROM scripture_cache WHERE created_at < ?", cutoff)
 	if err != nil {
-		return fmt.Errorf("purging old ESV cache entries: %w", err)
+		return fmt.Errorf("purging old scripture cache entries: %w", err)
 	}
 
 	// Count-based purge
 	var count int
-	err = s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM esv_cache").Scan(&count)
+	err = s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM scripture_cache").Scan(&count)
 	if err != nil {
-		return fmt.Errorf("counting ESV cache entries: %w", err)
+		return fmt.Errorf("counting scripture cache entries: %w", err)
 	}
 
 	if count > keepMax {
 		limit := count - keepMax
 		query := `
-			DELETE FROM esv_cache
+			DELETE FROM scripture_cache
 			WHERE reference IN (
 				SELECT reference
-				FROM esv_cache
+				FROM scripture_cache
 				ORDER BY created_at ASC
 				LIMIT ?
 			)
 		`
 		_, err = s.db.ExecContext(ctx, query, limit)
 		if err != nil {
-			return fmt.Errorf("expunging %d excess ESV cache entries: %w", limit, err)
+			return fmt.Errorf("expunging %d excess scripture cache entries: %w", limit, err)
 		}
-		slog.Info("expunged excess ESV cache entries", "removed_count", limit)
+		slog.Info("expunged excess scripture cache entries", "removed_count", limit)
 	}
 	return nil
 }
 
-// GetCachedESV retrieves a cached ESV response.
-func (s *Store) GetCachedESV(ctx context.Context, key string) (string, error) {
+// GetCachedScripture retrieves a cached scripture response.
+func (s *Store) GetCachedScripture(ctx context.Context, key string) (string, error) {
 	var content string
-	err := s.db.QueryRowContext(ctx, "SELECT content FROM esv_cache WHERE reference = ?", key).Scan(&content)
+	err := s.db.QueryRowContext(ctx, "SELECT content FROM scripture_cache WHERE reference = ?", key).Scan(&content)
 	if err != nil {
-		return "", fmt.Errorf("getting cached ESV content (key=%s): %w", key, err)
+		return "", fmt.Errorf("getting cached scripture content (key=%s): %w", key, err)
 	}
 	return content, nil
 }
 
-// SaveCachedESV saves an ESV response to the cache.
-func (s *Store) SaveCachedESV(ctx context.Context, key string, content string) error {
-	_, err := s.db.ExecContext(ctx, "INSERT OR REPLACE INTO esv_cache (reference, content) VALUES (?, ?)", key, content)
+// SaveCachedScripture saves a scripture response to the cache.
+func (s *Store) SaveCachedScripture(ctx context.Context, key string, content string) error {
+	_, err := s.db.ExecContext(ctx, "INSERT OR REPLACE INTO scripture_cache (reference, content) VALUES (?, ?)", key, content)
 	if err != nil {
-		return fmt.Errorf("saving to ESV cache (key=%s): %w", key, err)
+		return fmt.Errorf("saving to scripture cache (key=%s): %w", key, err)
 	}
 	return nil
+}
+
+// GetCachedESV retrieves a cached ESV response (compatibility wrapper).
+func (s *Store) GetCachedESV(ctx context.Context, key string) (string, error) {
+	return s.GetCachedScripture(ctx, key)
+}
+
+// SaveCachedESV saves an ESV response to the cache (compatibility wrapper).
+func (s *Store) SaveCachedESV(ctx context.Context, key string, content string) error {
+	return s.SaveCachedScripture(ctx, key, content)
 }
 
 // QueueEmail inserts a new email into the delivery queue.

@@ -1,7 +1,21 @@
 {{define "partial:reading"}}
 <div class="verses-section">
     <div class="daily-reading">
-        <h2>{{.date}}</h2>
+        <div class="reading-header">
+            <h2>{{.date}}</h2>
+            <div class="translation-selector">
+                <label for="translation-select" class="sr-only">Translation</label>
+                <select id="translation-select" name="translation"
+                        hx-post="/translation?date={{.date}}"
+                        hx-target="#content-container"
+                        hx-swap="outerHTML"
+                        class="translation-select">
+                    <option value="ESV" {{if or (eq .user.Translation "ESV") (not .user.Translation)}}selected{{end}}>ESV</option>
+                    <option value="NLT" {{if or (eq .user.Translation "NLT") (eq .user.Translation "d6e14a625393b4da-01")}}selected{{end}}>NLT</option>
+                    <option value="MSG" {{if or (eq .user.Translation "MSG") (eq .user.Translation "6f11a7de016f942e-01")}}selected{{end}}>The Message</option>
+                </select>
+            </div>
+        </div>
         {{if .esvData.Passages}}
         <div class="passages">
             {{- range .esvData.Passages}}
@@ -13,6 +27,23 @@
                 {{.esvData.Copyright}}
             </div>
         </div>
+        {{end}}
+        {{if .fumsTokens}}
+        <script nonce="{{.Nonce}}">
+            (function() {
+                var tokens = {{.fumsTokens | toJSON}};
+                function track() {
+                    if (window.fums && tokens && tokens.length > 0) {
+                        window.fums("trackView", tokens);
+                    }
+                }
+                if (document.readyState === "complete" || document.readyState === "interactive") {
+                    track();
+                } else {
+                    document.addEventListener("DOMContentLoaded", track);
+                }
+            })();
+        </script>
         {{end}}
     </div>
 </div>

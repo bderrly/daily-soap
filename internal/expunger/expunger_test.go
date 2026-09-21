@@ -17,7 +17,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 	}
 
 	query := `
-	CREATE TABLE esv_cache (
+	CREATE TABLE scripture_cache (
 		reference TEXT PRIMARY KEY,
 		content TEXT NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -36,14 +36,14 @@ func TestExpunge_TimeLimit(t *testing.T) {
 
 	ctx := context.TODO()
 
-	// Insert an old record (30 days ago)
-	_, err := db.Exec(`INSERT INTO esv_cache (reference, content, created_at) VALUES ('old', 'content', datetime('now', '-30 days'))`)
+	// Insert an old record (15 days ago - exceeds 14 days)
+	_, err := db.Exec(`INSERT INTO scripture_cache (reference, content, created_at) VALUES ('old', 'content', datetime('now', '-15 days'))`)
 	if err != nil {
 		t.Fatalf("failed to insert old record: %v", err)
 	}
 
 	// Insert a new record (1 day ago)
-	_, err = db.Exec(`INSERT INTO esv_cache (reference, content, created_at) VALUES ('new', 'content', datetime('now', '-1 days'))`)
+	_, err = db.Exec(`INSERT INTO scripture_cache (reference, content, created_at) VALUES ('new', 'content', datetime('now', '-1 days'))`)
 	if err != nil {
 		t.Fatalf("failed to insert new record: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestExpunge_TimeLimit(t *testing.T) {
 
 	// Verify old record is gone
 	var count int
-	err = db.QueryRow("SELECT COUNT(*) FROM esv_cache WHERE reference = 'old'").Scan(&count)
+	err = db.QueryRow("SELECT COUNT(*) FROM scripture_cache WHERE reference = 'old'").Scan(&count)
 	if err != nil {
 		t.Fatalf("failed to query count: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestExpunge_TimeLimit(t *testing.T) {
 	}
 
 	// Verify new record is present
-	err = db.QueryRow("SELECT COUNT(*) FROM esv_cache WHERE reference = 'new'").Scan(&count)
+	err = db.QueryRow("SELECT COUNT(*) FROM scripture_cache WHERE reference = 'new'").Scan(&count)
 	if err != nil {
 		t.Fatalf("failed to query count: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestExpunge_CountLimit(t *testing.T) {
 	// Make them have different timestamps so we can predict which ones get deleted
 	// 10 oldest records (from 10 days ago)
 	for i := 0; i < 10; i++ {
-		_, err := db.Exec(fmt.Sprintf(`INSERT INTO esv_cache (reference, content, created_at) VALUES ('old_%d', 'content', datetime('now', '-10 days', '+%d seconds'))`, i, i))
+		_, err := db.Exec(fmt.Sprintf(`INSERT INTO scripture_cache (reference, content, created_at) VALUES ('old_%d', 'content', datetime('now', '-10 days', '+%d seconds'))`, i, i))
 		if err != nil {
 			t.Fatalf("failed to insert record: %v", err)
 		}
@@ -92,7 +92,7 @@ func TestExpunge_CountLimit(t *testing.T) {
 
 	// 500 newer records (from 1 day ago)
 	for i := 0; i < 500; i++ {
-		_, err := db.Exec(fmt.Sprintf(`INSERT INTO esv_cache (reference, content, created_at) VALUES ('new_%d', 'content', datetime('now', '-1 days', '+%d seconds'))`, i, i))
+		_, err := db.Exec(fmt.Sprintf(`INSERT INTO scripture_cache (reference, content, created_at) VALUES ('new_%d', 'content', datetime('now', '-1 days', '+%d seconds'))`, i, i))
 		if err != nil {
 			t.Fatalf("failed to insert record: %v", err)
 		}
@@ -105,7 +105,7 @@ func TestExpunge_CountLimit(t *testing.T) {
 
 	// Should be exactly 500 records left
 	var count int
-	err := db.QueryRow("SELECT COUNT(*) FROM esv_cache").Scan(&count)
+	err := db.QueryRow("SELECT COUNT(*) FROM scripture_cache").Scan(&count)
 	if err != nil {
 		t.Fatalf("failed to query total count: %v", err)
 	}
@@ -115,7 +115,7 @@ func TestExpunge_CountLimit(t *testing.T) {
 
 	// The 10 "old_*" records should be gone because they were the oldest
 	// and we needed to remove 10 to get back to 500 (510 - 10 = 500)
-	err = db.QueryRow("SELECT COUNT(*) FROM esv_cache WHERE reference LIKE 'old_%'").Scan(&count)
+	err = db.QueryRow("SELECT COUNT(*) FROM scripture_cache WHERE reference LIKE 'old_%'").Scan(&count)
 	if err != nil {
 		t.Fatalf("failed to query old records count: %v", err)
 	}

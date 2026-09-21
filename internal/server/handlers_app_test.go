@@ -27,6 +27,18 @@ func (m *mockStore) SaveCachedESV(_ context.Context, _ string, _ string) error {
 	return nil
 }
 
+func (m *mockStore) GetCachedScripture(_ context.Context, _ string) (string, error) {
+	return `{"query": "test", "passages": ["<p>Mocked Verse</p>"]}`, nil
+}
+
+func (m *mockStore) SaveCachedScripture(_ context.Context, _ string, _ string) error {
+	return nil
+}
+
+func (m *mockStore) UpdateUserTranslation(_ context.Context, _ int64, _ string) error {
+	return nil
+}
+
 func (m *mockStore) GetSOAPDatesWithEntries(_ context.Context, _ int64, startDate string, endDate string) ([]string, error) {
 	if startDate == "2026-02-01" && endDate == "2026-08-31" {
 		return []string{"2026-05-01", "2026-05-02"}, nil
@@ -201,6 +213,69 @@ func TestHeaderNavigationAndTitleLinks(t *testing.T) {
 		nextCount := strings.Count(body, "Next 7 Days")
 		if nextCount != 2 {
 			t.Errorf("expected 2 'Next 7 Days' occurrences (top and bottom), got %d", nextCount)
+		}
+	})
+}
+
+func TestPostTranslation(t *testing.T) {
+	app := newTestApplication(t, &mockStore{})
+
+	user := &store.User{
+		ID:          1,
+		Email:       "user@example.com",
+		Timezone:    "UTC",
+		Translation: "ESV",
+	}
+
+	ctx := context.WithValue(context.Background(), userContextKey, user)
+	ctx = context.WithValue(ctx, csrfContextKey, "test-csrf")
+	ctx = context.WithValue(ctx, nonceContextKey, "test-nonce")
+
+	t.Run("valid translation update", func(t *testing.T) {
+		req, _ := http.NewRequestWithContext(ctx, "POST", "/translation?date=2026-01-01&translation=MSG", nil)
+		rr := httptest.NewRecorder()
+		app.postTranslation(rr, req)
+
+		if rr.Code != http.StatusFound {
+			t.Errorf("expected status 302 redirect, got %d", rr.Code)
+		}
+		if user.Translation != "MSG" {
+			t.Errorf("expected user translation to be updated to MSG, got %s", user.Translation)
+		}
+
+		reqNLT, _ := http.NewRequestWithContext(ctx, "POST", "/translation?date=2026-01-01&translation=d6e14a625393b4da-01", nil)
+		rrNLT := httptest.NewRecorder()
+		app.postTranslation(rrNLT, reqNLT)
+
+		if user.Translation != "NLT" {
+			t.Errorf("expected user translation to be updated to NLT, got %s", user.Translation)
+		}
+	})
+
+	t.Run("htmx translation update", func(t *testing.T) {
+		fakeRef := "ESV:Psalm 1;Genesis 1:1–2:3;Matthew 1:1–17"
+		_ = app.store.SaveCachedScripture(ctx, fakeRef, `{"passages":["<p>Test</p>"]}`)
+
+		req, _ := http.NewRequestWithContext(ctx, "POST", "/translation?date=2026-01-01&translation=ESV", nil)
+		req.Header.Set("HX-Request", "true")
+		rr := httptest.NewRecorder()
+		app.postTranslation(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Errorf("expected status 200 OK for HTMX translation update, got %d", rr.Code)
+		}
+		if !strings.Contains(rr.Body.String(), `id="content-container"`) {
+			t.Errorf("expected rendered content container in HTMX response, got: %s", rr.Body.String())
+		}
+	})
+
+	t.Run("invalid translation", func(t *testing.T) {
+		req, _ := http.NewRequestWithContext(ctx, "POST", "/translation?translation=KJV", nil)
+		rr := httptest.NewRecorder()
+		app.postTranslation(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Errorf("expected status 400 bad request, got %d", rr.Code)
 		}
 	})
 }

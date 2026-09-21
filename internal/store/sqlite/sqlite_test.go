@@ -24,6 +24,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 		password_hash TEXT NOT NULL,
 		verification_token TEXT,
 		timezone TEXT NOT NULL DEFAULT 'UTC',
+		translation TEXT NOT NULL DEFAULT 'ESV',
 		is_admin INTEGER DEFAULT 0 NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
 		verified_at DATETIME
@@ -45,7 +46,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 		PRIMARY KEY (user_id, date),
 		FOREIGN KEY(user_id) REFERENCES users(id)
 	);
-	CREATE TABLE esv_cache (
+	CREATE TABLE scripture_cache (
 		reference TEXT PRIMARY KEY,
 		content TEXT NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -502,6 +503,51 @@ func TestStore_ESVCache(t *testing.T) {
 	}
 	if content != "In the beginning..." {
 		t.Errorf("expected content, got %s", content)
+	}
+
+	// Test ScriptureCache methods directly
+	err = s.SaveCachedScripture(ctx, "NLT:John 1:1", "In the beginning the Word...")
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	content, err = s.GetCachedScripture(ctx, "NLT:John 1:1")
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	if content != "In the beginning the Word..." {
+		t.Errorf("expected NLT content, got %s", content)
+	}
+}
+
+func TestStore_UserTranslation(t *testing.T) {
+	db := setupTestDB(t)
+	s := New(db)
+	ctx := context.Background()
+
+	err := s.CreateUser(ctx, "trans@example.com", "hash", "tok", "UTC")
+	if err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+
+	u, err := s.GetUserByEmail(ctx, "trans@example.com")
+	if err != nil {
+		t.Fatalf("GetUserByEmail failed: %v", err)
+	}
+	if u.Translation != "ESV" {
+		t.Errorf("expected default translation 'ESV', got %q", u.Translation)
+	}
+
+	err = s.UpdateUserTranslation(ctx, u.ID, "d6e14a625393b4da-01")
+	if err != nil {
+		t.Fatalf("UpdateUserTranslation failed: %v", err)
+	}
+
+	u, err = s.GetUserByEmail(ctx, "trans@example.com")
+	if err != nil {
+		t.Fatalf("GetUserByEmail after update failed: %v", err)
+	}
+	if u.Translation != "d6e14a625393b4da-01" {
+		t.Errorf("expected updated translation 'd6e14a625393b4da-01', got %q", u.Translation)
 	}
 }
 

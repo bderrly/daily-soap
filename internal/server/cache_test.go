@@ -26,7 +26,7 @@ func TestFetchPassagesWithCache_Hit(t *testing.T) {
 
 	// 2. Create table.
 	createCacheSQL := `
-	CREATE TABLE esv_cache (
+	CREATE TABLE scripture_cache (
 		reference TEXT PRIMARY KEY,
 		content TEXT NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -43,13 +43,13 @@ func TestFetchPassagesWithCache_Hit(t *testing.T) {
 	}
 	responseBytes, _ := json.Marshal(fakeResponse)
 
-	_, err = db.Exec("INSERT INTO esv_cache (reference, content) VALUES (?, ?)", fakeRef, string(responseBytes))
+	_, err = db.Exec("INSERT INTO scripture_cache (reference, content) VALUES (?, ?)", "ESV:"+fakeRef, string(responseBytes))
 	if err != nil {
 		t.Fatalf("failed to insert fake cache: %v", err)
 	}
 
 	// 4. Call function under test.
-	result, err := app.fetchPassagesWithCache(context.TODO(), []string{fakeRef})
+	result, err := app.fetchPassagesWithCache(context.TODO(), "ESV", []string{fakeRef})
 	if err != nil {
 		t.Fatalf("fetchPassagesWithCache failed: %v", err)
 	}

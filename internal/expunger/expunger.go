@@ -38,9 +38,9 @@ func Start(ctx context.Context, s store.Store) {
 	}()
 }
 
-// Expunge removes old and excess entries from the esv_cache table.
+// Expunge removes old and excess entries from the scripture_cache table.
 func Expunge(ctx context.Context, s store.Store) error {
-	if err := s.ExpungeCache(ctx, 28*24*time.Hour, 500); err != nil {
+	if err := s.ExpungeCache(ctx, 14*24*time.Hour, 500); err != nil {
 		return fmt.Errorf("expunging cache: %w", err)
 	}
 	return nil

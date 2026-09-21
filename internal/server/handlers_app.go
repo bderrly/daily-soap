@@ -58,9 +58,10 @@ func (app *application) home(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch verse content from ESV API (using cache).
-	verseContents, err := app.fetchPassagesWithCache(r.Context(), dailyText.Verses)
+	// Fetch verse content using translation and cache.
+	verseContents, err := app.fetchPassagesWithCache(r.Context(), user.Translation, dailyText.Verses)
 	if err != nil {
+		slog.Error("failed to fetch verses", "date", dateStr, "translation", user.Translation, "error", err)
 		http.Error(w, fmt.Sprintf("Error loading verses for %s", dateStr), http.StatusInternalServerError)
 		return
 	}
@@ -82,6 +83,7 @@ func (app *application) home(w http.ResponseWriter, r *http.Request) {
 	// Prepare template data.
 	data := map[string]any{
 		"esvData":        verseContents,
+		"fumsTokens":     verseContents.FUMSTokens,
 		"date":           dateStr,
 		"observation":    soapData.Observation,
 		"application":    soapData.Application,
@@ -249,7 +251,7 @@ func (app *application) export(w http.ResponseWriter, r *http.Request) {
 	if len(soapData.SelectedVerses) > 0 {
 		references = []string{esv.FormatReferences(soapData.SelectedVerses)}
 	}
-	verseContents, err := app.fetchPassagesWithCache(r.Context(), references)
+	verseContents, err := app.fetchPassagesWithCache(r.Context(), user.Translation, references)
 	if err != nil {
 		slog.Error("failed to fetch verses for export", "date", req.Date, "error", err)
 		http.Error(w, fmt.Sprintf("Error loading verses for %s", req.Date), http.StatusInternalServerError)
@@ -260,6 +262,10 @@ func (app *application) export(w http.ResponseWriter, r *http.Request) {
 
 	// Email Logic:
 	if req.Method == "email" {
+		for _, token := range verseContents.FUMSTokens {
+			scriptureHTML += fmt.Sprintf(`<img src="https://fums.api.bible/f3?t=%s" width="1" height="1" style="display:none;" alt="" />`, token)
+		}
+
 		// Only allow format: html.
 		if req.Format != "html" {
 			w.Header().Set("Content-Type", "application/json")
@@ -385,7 +391,7 @@ func (app *application) history(w http.ResponseWriter, r *http.Request) {
 
 		if len(entry.SelectedVerses) > 0 {
 			references := []string{esv.FormatReferences(entry.SelectedVerses)}
-			esvRes, err := app.fetchPassagesWithCache(r.Context(), references)
+			esvRes, err := app.fetchPassagesWithCache(r.Context(), user.Translation, references)
 			if err != nil {
 				slog.Error("failed to fetch verses for history", "date", entry.Date, "error", err)
 			} else {
@@ -423,4 +429,61 @@ func (app *application) history(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
+}
+
+// postTranslation updates the user's preferred Bible translation.
+func (app *application) postTranslation(w http.ResponseWriter, r *http.Request) {
+	user := r.Context().Value(userContextKey).(*store.User)
+
+	translation := r.FormValue("translation")
+	if translation == "" {
+		translation = r.URL.Query().Get("translation")
+	}
+
+	switch {
+	case strings.EqualFold(translation, "ESV"):
+		translation = "ESV"
+	case strings.EqualFold(translation, "NLT") || translation == "d6e14a625393b4da-01":
+		translation = "NLT"
+	case strings.EqualFold(translation, "MSG") || translation == "6f11a7de016f942e-01":
+		translation = "MSG"
+	default:
+		http.Error(w, "Invalid translation", http.StatusBadRequest)
+		return
+	}
+
+	if err := app.store.UpdateUserTranslation(r.Context(), user.ID, translation); err != nil {
+		slog.Error("failed to update user translation", "error", err, "userID", user.ID)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	user.Translation = translation
+
+	dateStr := r.URL.Query().Get("date")
+	if dateStr == "" {
+		dateStr = r.FormValue("date")
+	}
+
+	if isHTMXRequest(r) {
+		if dateStr == "" {
+			loc, err := time.LoadLocation(user.Timezone)
+			if err != nil {
+				loc = time.UTC
+			}
+			dateStr = time.Now().In(loc).Format(time.DateOnly)
+		}
+		r.URL.Path = "/"
+		r.URL.RawQuery = "date=" + dateStr
+		app.home(w, r)
+		return
+	}
+
+	redirURL := "/"
+	if dateStr != "" {
+		if t, err := time.Parse(time.DateOnly, dateStr); err == nil {
+			redirURL = "/?date=" + t.Format(time.DateOnly)
+		}
+	}
+	// #nosec G710 - redirURL is guaranteed to be a relative path with validated DateOnly parameter.
+	http.Redirect(w, r, redirURL, http.StatusFound)
 }

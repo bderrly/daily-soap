@@ -27,9 +27,10 @@ type PassageMeta struct {
 // Response represents the response structure from the ESV API.
 type Response struct {
 	Query       string        `json:"query"`
-	PassageMeta []PassageMeta `json:"passage_meta"`
+	PassageMeta []PassageMeta `json:"passage_meta,omitempty"`
 	Passages    []string      `json:"passages"`
 	Copyright   string        `json:"copyright"`
+	FUMSTokens  []string      `json:"fums_tokens,omitempty"`
 }
 
 // FetchPassages fetches verses from the ESV API.
