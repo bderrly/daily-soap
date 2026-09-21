@@ -6,6 +6,7 @@
         window.SOAP_DATA = {
             date: {{.date | printf "%s"}},
             selectedVerses: {{if .selectedVerses}}{{.selectedVerses | toJSON}}{{else}} []{{end}},
+            translation: "{{.translation}}",
             csrfToken: "{{.CSRFToken}}"
         };
     </script>
@@ -61,7 +62,7 @@
 <!-- Fragment for HTMX partial swap on date change -->
 
 {{define "home:content"}}
-    <div class="content-wrapper" id="content-container" data-date="{{.date}}" data-selected-verses="{{if .selectedVerses}}{{.selectedVerses | toJSON}}{{else}}[]{{end}}">
+    <div class="content-wrapper" id="content-container" data-date="{{.date}}" data-selected-verses="{{if .selectedVerses}}{{.selectedVerses | toJSON}}{{else}}[]{{end}}" data-translation="{{.translation}}">
         {{template "partial:reading" .}}
         {{template "partial:soap" .}}
     </div>

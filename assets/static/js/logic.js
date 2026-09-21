@@ -33,11 +33,12 @@ export function parseVerseId(verseId) {
 }
 
 /**
- * Format selected verses as reference string (e.g., "Isaiah 63:8-9")
+ * Format selected verses as reference string (e.g., "Isaiah 63:8-9" or "Isaiah 63:8-9 (ESV)")
  * @param {string[]} verseIds
+ * @param {string} [translation='']
  * @returns {string}
  */
-export function formatVerseReference(verseIds) {
+export function formatVerseReference(verseIds, translation = '') {
     if (verseIds.length === 0) return '';
 
     // Group verses by book and chapter
@@ -93,5 +94,9 @@ export function formatVerseReference(verseIds) {
         references.push(`${bookName} ${group.chapter}:${ranges.join(',')}`);
     }
 
-    return references.join('; ');
+    const ref = references.join('; ');
+    if (translation) {
+        return `${ref} (${translation})`;
+    }
+    return ref;
 }

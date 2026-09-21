@@ -42,6 +42,7 @@ type SOAPData struct {
 	Application    string   `json:"application"`
 	Prayer         string   `json:"prayer"`
 	SelectedVerses []string `json:"selectedVerses"`
+	Translation    string   `json:"translation"`
 }
 
 // AdminStats contains aggregated metrics for user administration.
@@ -93,6 +94,7 @@ type Store interface {
 	UpdateUserPasswordHash(ctx context.Context, userID int64, newHash string) error
 	UpdateUserTimezone(ctx context.Context, userID int64, timezone string) error
 	UpdateUserTranslation(ctx context.Context, userID int64, translation string) error
+	UpdateJournalTranslation(ctx context.Context, userID int64, date, translation string) error
 	GetSOAPDataRange(ctx context.Context, userID int64, startDate string, endDate string) ([]*SOAPData, error)
 	// GetSOAPDatesWithEntries retrieves dates within the given date range that have non-empty journal entries for a user.
 	GetSOAPDatesWithEntries(ctx context.Context, userID int64, startDate string, endDate string) ([]string, error)

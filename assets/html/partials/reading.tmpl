@@ -10,9 +10,9 @@
                         hx-target="#content-container"
                         hx-swap="outerHTML"
                         class="translation-select">
-                    <option value="ESV" {{if or (eq .user.Translation "ESV") (not .user.Translation)}}selected{{end}}>ESV</option>
-                    <option value="NLT" {{if or (eq .user.Translation "NLT") (eq .user.Translation "d6e14a625393b4da-01")}}selected{{end}}>NLT</option>
-                    <option value="MSG" {{if or (eq .user.Translation "MSG") (eq .user.Translation "6f11a7de016f942e-01")}}selected{{end}}>The Message</option>
+                    <option value="ESV" {{if or (eq .translation "ESV") (and (not .translation) (or (eq .user.Translation "ESV") (not .user.Translation)))}}selected{{end}}>ESV</option>
+                    <option value="NLT" {{if or (eq .translation "NLT") (and (not .translation) (or (eq .user.Translation "NLT") (eq .user.Translation "d6e14a625393b4da-01")))}}selected{{end}}>NLT</option>
+                    <option value="MSG" {{if or (eq .translation "MSG") (and (not .translation) (or (eq .user.Translation "MSG") (eq .user.Translation "6f11a7de016f942e-01")))}}selected{{end}}>The Message</option>
                 </select>
             </div>
         </div>

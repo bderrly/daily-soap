@@ -19,6 +19,20 @@ const (
 	TranslationMSG = "6f11a7de016f942e-01"
 )
 
+// Shorthand returns the short-hand translation abbreviation for a Bible ID or translation name.
+func Shorthand(bibleID string) string {
+	switch strings.ToLower(strings.TrimSpace(bibleID)) {
+	case TranslationNLT, "nlt":
+		return "NLT"
+	case TranslationMSG, "msg":
+		return "MSG"
+	case "esv":
+		return "ESV"
+	default:
+		return strings.ToUpper(strings.TrimSpace(bibleID))
+	}
+}
+
 // Common API.Bible error codes.
 var (
 	ErrBadRequest   = errors.New("bad request (invalid bible or passage ID)")
@@ -163,7 +177,8 @@ func (c *Client) FetchPassages(ctx context.Context, bibleID string, references [
 			}
 
 			if passageData.Data.Reference != "" && !strings.Contains(processedHTML, "<h2") {
-				processedHTML = fmt.Sprintf("<h2 class=\"extra_text\">%s</h2>\n%s", passageData.Data.Reference, processedHTML)
+				shorthand := Shorthand(bibleID)
+				processedHTML = fmt.Sprintf("<h2 class=\"extra_text\">%s (%s)</h2>\n%s", passageData.Data.Reference, shorthand, processedHTML)
 			}
 
 			resp.Passages = append(resp.Passages, processedHTML)

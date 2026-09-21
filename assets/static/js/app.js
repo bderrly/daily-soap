@@ -61,11 +61,38 @@ function getVerseInfo(element) {
     return null;
 }
 
+// Normalize translation value to short-hand
+function normalizeTranslationShorthand(t) {
+    if (!t) return 'ESV';
+    const upper = t.toUpperCase().trim();
+    if (upper === 'NLT' || upper === 'D6E14A625393B4DA-01') return 'NLT';
+    if (upper === 'MSG' || upper === '6F11A7DE016F942E-01' || upper === 'THE MESSAGE') return 'MSG';
+    if (upper === 'ESV') return 'ESV';
+    return upper;
+}
+
+// Get the active translation short-hand
+function getActiveTranslation() {
+    const translationSelect = document.getElementById('translation-select');
+    if (translationSelect && translationSelect.value) {
+        return normalizeTranslationShorthand(translationSelect.value);
+    }
+    const container = document.getElementById('content-container');
+    if (container && container.dataset.translation) {
+        return normalizeTranslationShorthand(container.dataset.translation);
+    }
+    if (window.SOAP_DATA && window.SOAP_DATA.translation) {
+        return normalizeTranslationShorthand(window.SOAP_DATA.translation);
+    }
+    return 'ESV';
+}
+
 // Update verse reference display
 function updateVerseReference() {
     const selectedVersesReference = document.getElementById('selectedVersesReference');
     if (!selectedVersesReference) return;
-    const reference = formatVerseReference(selectedVerseIds);
+    const translation = getActiveTranslation();
+    const reference = formatVerseReference(selectedVerseIds, translation);
     if (reference) {
         selectedVersesReference.textContent = reference;
         selectedVersesReference.style.display = 'block';
@@ -344,6 +371,9 @@ document.body.addEventListener('htmx:afterSwap', function (evt) {
             } catch (e) {
                 console.error('Failed to parse selected verses from container:', e);
             }
+            if (container.dataset.translation && window.SOAP_DATA) {
+                window.SOAP_DATA.translation = container.dataset.translation;
+            }
             // Keep window.SOAP_DATA in sync
             if (window.SOAP_DATA) {
                 window.SOAP_DATA.date = currentDate;
@@ -449,10 +479,15 @@ document.body.addEventListener('click', function (e) {
     }
 });
 
-// Handle date changes using body-level event delegation
+// Handle date and translation changes using body-level event delegation
 document.body.addEventListener('change', async function (e) {
     if (e.target.id === 'date-picker') {
         await handleDateChange(e.target.value);
+    } else if (e.target.id === 'translation-select') {
+        if (window.SOAP_DATA) {
+            window.SOAP_DATA.translation = normalizeTranslationShorthand(e.target.value);
+        }
+        updateVerseReference();
     }
 });
 
@@ -479,7 +514,8 @@ function saveData(immediate = false) {
         observation: observationField.value,
         application: applicationField.value,
         prayer: prayerField.value,
-        selectedVerses: selectedVerseIds
+        selectedVerses: selectedVerseIds,
+        translation: getActiveTranslation()
     };
 
     if (immediate) {

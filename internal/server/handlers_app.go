@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -16,6 +17,24 @@ import (
 	"github.com/bderrly/daily-soap/internal/export"
 	"github.com/bderrly/daily-soap/internal/store"
 )
+
+var h2Regex = regexp.MustCompile(`(?i)(<h2 class="extra_text">)(.*?)(</h2>)`)
+
+func normalizeTranslation(t string) string {
+	switch strings.ToUpper(strings.TrimSpace(t)) {
+	case "NLT", "D6E14A625393B4DA-01":
+		return "NLT"
+	case "MSG", "6F11A7DE016F942E-01", "THE MESSAGE":
+		return "MSG"
+	case "ESV":
+		return "ESV"
+	default:
+		if t != "" {
+			return t
+		}
+		return "ESV"
+	}
+}
 
 func (app *application) home(w http.ResponseWriter, r *http.Request) {
 	user := r.Context().Value(userContextKey).(*store.User)
@@ -58,14 +77,6 @@ func (app *application) home(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch verse content using translation and cache.
-	verseContents, err := app.fetchPassagesWithCache(r.Context(), user.Translation, dailyText.Verses)
-	if err != nil {
-		slog.Error("failed to fetch verses", "date", dateStr, "translation", user.Translation, "error", err)
-		http.Error(w, fmt.Sprintf("Error loading verses for %s", dateStr), http.StatusInternalServerError)
-		return
-	}
-
 	// Load existing SOAP data from database.
 	soapData, err := app.store.GetSOAPData(r.Context(), user.ID, dateStr)
 	if err != nil {
@@ -77,7 +88,22 @@ func (app *application) home(w http.ResponseWriter, r *http.Request) {
 			Application:    "",
 			Prayer:         "",
 			SelectedVerses: []string{},
+			Translation:    normalizeTranslation(user.Translation),
 		}
+	}
+
+	activeTranslation := soapData.Translation
+	if activeTranslation == "" {
+		activeTranslation = user.Translation
+	}
+	activeTranslation = normalizeTranslation(activeTranslation)
+
+	// Fetch verse content using translation and cache.
+	verseContents, err := app.fetchPassagesWithCache(r.Context(), activeTranslation, dailyText.Verses)
+	if err != nil {
+		slog.Error("failed to fetch verses", "date", dateStr, "translation", activeTranslation, "error", err)
+		http.Error(w, fmt.Sprintf("Error loading verses for %s", dateStr), http.StatusInternalServerError)
+		return
 	}
 
 	// Prepare template data.
@@ -89,6 +115,7 @@ func (app *application) home(w http.ResponseWriter, r *http.Request) {
 		"application":    soapData.Application,
 		"prayer":         soapData.Prayer,
 		"selectedVerses": soapData.SelectedVerses,
+		"translation":    activeTranslation,
 		"user":           user,
 		"CSRFToken":      r.Context().Value(csrfContextKey).(string),
 		"Nonce":          r.Context().Value(nonceContextKey).(string),
@@ -192,6 +219,11 @@ func (app *application) postSoap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if soapData.Translation == "" {
+		soapData.Translation = user.Translation
+	}
+	soapData.Translation = normalizeTranslation(soapData.Translation)
+
 	if err := app.store.SaveSOAPData(r.Context(), user.ID, &soapData); err != nil {
 		slog.Error("failed to save SOAP data", "error", err)
 		w.Header().Set("Content-Type", "application/json")
@@ -233,6 +265,13 @@ func (app *application) export(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	translation := soapData.Translation
+	if translation == "" {
+		translation = user.Translation
+	}
+	translation = normalizeTranslation(translation)
+	soapData.Translation = translation
+
 	// Fetch Scripture content.
 	dailyText, err := dailytexts.GetDailyText(req.Date)
 	if err != nil {
@@ -246,16 +285,30 @@ func (app *application) export(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch verse content from ESV API (using cache).
+	// Fetch verse content using translation (using cache).
 	references := dailyText.Verses
 	if len(soapData.SelectedVerses) > 0 {
 		references = []string{esv.FormatReferences(soapData.SelectedVerses)}
 	}
-	verseContents, err := app.fetchPassagesWithCache(r.Context(), user.Translation, references)
+	verseContents, err := app.fetchPassagesWithCache(r.Context(), translation, references)
 	if err != nil {
 		slog.Error("failed to fetch verses for export", "date", req.Date, "error", err)
 		http.Error(w, fmt.Sprintf("Error loading verses for %s", req.Date), http.StatusInternalServerError)
 		return
+	}
+
+	for i, p := range verseContents.Passages {
+		if strings.Contains(p, "<h2 class=\"extra_text\">") {
+			verseContents.Passages[i] = h2Regex.ReplaceAllStringFunc(p, func(m string) string {
+				sub := h2Regex.FindStringSubmatch(m)
+				if len(sub) == 4 && !strings.Contains(sub[2], "("+translation+")") {
+					return fmt.Sprintf("%s%s (%s)%s", sub[1], sub[2], translation, sub[3])
+				}
+				return m
+			})
+		} else if len(references) > i {
+			verseContents.Passages[i] = fmt.Sprintf("<h2 class=\"extra_text\">%s (%s)</h2>\n%s", references[i], translation, p)
+		}
 	}
 
 	scriptureHTML := strings.Join(verseContents.Passages, "\n")
@@ -391,12 +444,30 @@ func (app *application) history(w http.ResponseWriter, r *http.Request) {
 
 		if len(entry.SelectedVerses) > 0 {
 			references := []string{esv.FormatReferences(entry.SelectedVerses)}
-			esvRes, err := app.fetchPassagesWithCache(r.Context(), user.Translation, references)
+			entryTranslation := entry.Translation
+			if entryTranslation == "" {
+				entryTranslation = user.Translation
+			}
+			entryTranslation = normalizeTranslation(entryTranslation)
+
+			esvRes, err := app.fetchPassagesWithCache(r.Context(), entryTranslation, references)
 			if err != nil {
 				slog.Error("failed to fetch verses for history", "date", entry.Date, "error", err)
 			} else {
 				for _, p := range esvRes.Passages {
-					htmlPassages = append(htmlPassages, template.HTML(p)) // #nosec G203
+					var formattedP string
+					if strings.Contains(p, "<h2 class=\"extra_text\">") {
+						formattedP = h2Regex.ReplaceAllStringFunc(p, func(m string) string {
+							sub := h2Regex.FindStringSubmatch(m)
+							if len(sub) == 4 && !strings.Contains(sub[2], "("+entryTranslation+")") {
+								return fmt.Sprintf("%s%s (%s)%s", sub[1], sub[2], entryTranslation, sub[3])
+							}
+							return m
+						})
+					} else {
+						formattedP = fmt.Sprintf("<h2 class=\"extra_text\">%s (%s)</h2>\n%s", esv.FormatReferences(entry.SelectedVerses), entryTranslation, p)
+					}
+					htmlPassages = append(htmlPassages, template.HTML(formattedP)) // #nosec G203
 				}
 			}
 		}
@@ -462,6 +533,11 @@ func (app *application) postTranslation(w http.ResponseWriter, r *http.Request) 
 	dateStr := r.URL.Query().Get("date")
 	if dateStr == "" {
 		dateStr = r.FormValue("date")
+	}
+	if dateStr != "" {
+		if err := app.store.UpdateJournalTranslation(r.Context(), user.ID, dateStr, translation); err != nil {
+			slog.Warn("failed to update journal translation on translation change", "error", err, "userID", user.ID, "date", dateStr)
+		}
 	}
 
 	if isHTMXRequest(r) {

@@ -536,3 +536,86 @@ Deno.test("flatpickr initialization and entry encircling", { sanitizeOps: false,
   assertEquals(dayElemNoEntry.classList.contains("has-journal-entry"), false, "Should not have has-journal-entry class");
 });
 
+Deno.test("verse reference and save payload include translation shorthand", { sanitizeOps: false, sanitizeResources: false }, async () => {
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <body>
+        <div class="content-wrapper" id="content-container" data-date="2026-07-01" data-selected-verses="[]" data-translation="NLT">
+          <select id="translation-select">
+            <option value="ESV">ESV</option>
+            <option value="NLT" selected>NLT</option>
+            <option value="MSG">MSG</option>
+          </select>
+          <div class="verses-section">
+            <div class="daily-reading">
+              <div class="passages">
+                <div class="verse-content">
+                  <p><span class="verse" data-ref="01002017"><b class="verse-num">17</b>but of the tree...</span></p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="selectedVersesReference"></div>
+          <textarea id="observation"></textarea>
+          <textarea id="application"></textarea>
+          <textarea id="prayer"></textarea>
+          <div id="saveStatus"></div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const { window, document, Node } = parseHTML(html);
+
+  window.Node = Node;
+  window.SOAP_DATA = {
+    csrfToken: "test-token",
+    translation: "NLT"
+  };
+  window.Intl = {
+    DateTimeFormat: () => ({
+      resolvedOptions: () => ({ timeZone: "UTC" })
+    })
+  };
+
+  let lastPayload = null;
+  window.fetch = (url, options) => {
+    if (url === '/soap' && options.method === 'POST') {
+      lastPayload = JSON.parse(options.body);
+    }
+    return Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ status: "success" })
+    });
+  };
+
+  await loadApp(window);
+
+  const verseSpan = document.querySelector('[data-ref="01002017"]');
+  assertExists(verseSpan, "Verse span should exist");
+
+  // Click verse to select it
+  verseSpan.dispatchEvent(new window.Event("click", { bubbles: true, cancelable: true }));
+
+  const referenceDiv = document.getElementById("selectedVersesReference");
+  assertEquals(referenceDiv.textContent, "Genesis 2:17 (NLT)", "Reference should include (NLT) translation");
+
+  // Wait for autosave
+  await new Promise(resolve => setTimeout(resolve, 1100));
+
+  assertExists(lastPayload, "Payload should be sent");
+  assertEquals(lastPayload.translation, "NLT", "Payload should contain translation NLT");
+
+  // Change translation select to MSG
+  const select = document.getElementById("translation-select");
+  const nltOpt = select.querySelector('option[value="NLT"]');
+  const msgOpt = select.querySelector('option[value="MSG"]');
+  if (nltOpt) nltOpt.removeAttribute("selected");
+  if (msgOpt) msgOpt.setAttribute("selected", "selected");
+  select.dispatchEvent(new window.Event("change", { bubbles: true, cancelable: true }));
+
+  assertEquals(referenceDiv.textContent, "Genesis 2:17 (MSG)", "Reference should update to (MSG) translation");
+});
+
+

@@ -25,3 +25,10 @@ Deno.test("formatVerseReference - handles multiple chapters", () => {
     const result = formatVerseReference(input);
     assertEquals(result, "Isaiah 63:8; Isaiah 64:1");
 });
+
+Deno.test("formatVerseReference - includes translation shorthand when provided", () => {
+    const input = ["23063008", "23063009", "23063010"];
+    const result = formatVerseReference(input, "NLT");
+    assertEquals(result, "Isaiah 63:8-10 (NLT)");
+});
+

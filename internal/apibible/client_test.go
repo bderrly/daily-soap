@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/bderrly/daily-soap/internal/apibible"
@@ -49,6 +50,9 @@ func TestClient_FetchPassages_Success(t *testing.T) {
 
 	if len(resp.Passages) != 1 {
 		t.Fatalf("expected 1 passage, got %d", len(resp.Passages))
+	}
+	if !strings.Contains(resp.Passages[0], `<h2 class="extra_text">John 3:16 (NLT)</h2>`) {
+		t.Errorf("expected passage to contain heading with short-hand (NLT), got %q", resp.Passages[0])
 	}
 	if resp.Copyright != "ABS 2026" {
 		t.Errorf("expected copyright 'ABS 2026', got %q", resp.Copyright)

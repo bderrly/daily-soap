@@ -58,16 +58,24 @@ func (s *Store) GetUserFromSession(ctx context.Context, token string) (*store.Us
 func (s *Store) GetSOAPData(ctx context.Context, userID int64, dateStr string) (*store.SOAPData, error) {
 	var soapData store.SOAPData
 	var selectedVersesJSON sql.NullString
+	var translation sql.NullString
 	soapData.Date = dateStr
 
-	query := `SELECT observation, application, prayer, selected_verses FROM journal WHERE user_id = ? AND date = ?`
-	err := s.db.QueryRowContext(ctx, query, userID, dateStr).Scan(&soapData.Observation, &soapData.Application, &soapData.Prayer, &selectedVersesJSON)
+	query := `SELECT observation, application, prayer, selected_verses, translation FROM journal WHERE user_id = ? AND date = ?`
+	err := s.db.QueryRowContext(ctx, query, userID, dateStr).Scan(&soapData.Observation, &soapData.Application, &soapData.Prayer, &selectedVersesJSON, &translation)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			soapData.SelectedVerses = []string{}
+			soapData.Translation = "ESV"
 			return &soapData, nil
 		}
 		return nil, fmt.Errorf("retrieving SOAP journal data: %w", err)
+	}
+
+	if translation.Valid && translation.String != "" {
+		soapData.Translation = translation.String
+	} else {
+		soapData.Translation = "ESV"
 	}
 
 	if selectedVersesJSON.Valid && selectedVersesJSON.String != "" {
@@ -83,7 +91,7 @@ func (s *Store) GetSOAPData(ctx context.Context, userID int64, dateStr string) (
 
 // GetSOAPDataRange retrieves SOAP data from the database for a given user and date range.
 func (s *Store) GetSOAPDataRange(ctx context.Context, userID int64, startDate string, endDate string) ([]*store.SOAPData, error) {
-	query := `SELECT date, observation, application, prayer, selected_verses
+	query := `SELECT date, observation, application, prayer, selected_verses, translation
 			  FROM journal
 			  WHERE user_id = ? AND date >= ? AND date <= ?
 			  ORDER BY date DESC`
@@ -99,8 +107,14 @@ func (s *Store) GetSOAPDataRange(ctx context.Context, userID int64, startDate st
 	for rows.Next() {
 		var soapData store.SOAPData
 		var selectedVersesJSON sql.NullString
-		if err := rows.Scan(&soapData.Date, &soapData.Observation, &soapData.Application, &soapData.Prayer, &selectedVersesJSON); err != nil {
+		var translation sql.NullString
+		if err := rows.Scan(&soapData.Date, &soapData.Observation, &soapData.Application, &soapData.Prayer, &selectedVersesJSON, &translation); err != nil {
 			return nil, fmt.Errorf("scanning SOAP data range row: %w", err)
+		}
+		if translation.Valid && translation.String != "" {
+			soapData.Translation = translation.String
+		} else {
+			soapData.Translation = "ESV"
 		}
 		if selectedVersesJSON.Valid && selectedVersesJSON.String != "" {
 			if err := json.Unmarshal([]byte(selectedVersesJSON.String), &soapData.SelectedVerses); err != nil {
@@ -169,19 +183,37 @@ func (s *Store) SaveSOAPData(ctx context.Context, userID int64, soapData *store.
 		return fmt.Errorf("JSON marshaling selected verses: %w", err)
 	}
 
+	translation := soapData.Translation
+	if translation == "" {
+		translation = "ESV"
+	}
+
 	query := `
-		INSERT INTO journal (user_id, date, observation, application, prayer, selected_verses)
-		VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO journal (user_id, date, observation, application, prayer, selected_verses, translation)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(user_id, date) DO UPDATE SET
 			observation = excluded.observation,
 			application = excluded.application,
 			prayer = excluded.prayer,
 			selected_verses = excluded.selected_verses,
+			translation = excluded.translation,
 			timestamp = CURRENT_TIMESTAMP
 	`
-	_, err = s.db.ExecContext(ctx, query, userID, soapData.Date, soapData.Observation, soapData.Application, soapData.Prayer, string(selectedVersesJSON))
+	_, err = s.db.ExecContext(ctx, query, userID, soapData.Date, soapData.Observation, soapData.Application, soapData.Prayer, string(selectedVersesJSON), translation)
 	if err != nil {
 		return fmt.Errorf("saving SOAP data: %w", err)
+	}
+	return nil
+}
+
+// UpdateJournalTranslation updates the translation of an existing journal entry.
+func (s *Store) UpdateJournalTranslation(ctx context.Context, userID int64, date, translation string) error {
+	if translation == "" {
+		translation = "ESV"
+	}
+	_, err := s.db.ExecContext(ctx, "UPDATE journal SET translation = ? WHERE user_id = ? AND date = ?", translation, userID, date)
+	if err != nil {
+		return fmt.Errorf("updating journal translation: %w", err)
 	}
 	return nil
 }

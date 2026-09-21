@@ -42,6 +42,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 		application TEXT NOT NULL,
 		prayer TEXT NOT NULL,
 		selected_verses TEXT,
+		translation TEXT NOT NULL DEFAULT 'ESV',
 		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
 		PRIMARY KEY (user_id, date),
 		FOREIGN KEY(user_id) REFERENCES users(id)
@@ -150,6 +151,9 @@ func TestStore_GetSOAPData(t *testing.T) {
 		if data.Observation != "obs" {
 			t.Errorf("unexpected soap data: %+v", data)
 		}
+		if data.Translation != "ESV" {
+			t.Errorf("expected default translation ESV, got %s", data.Translation)
+		}
 	})
 
 	t.Run("Non-existent SOAP data", func(t *testing.T) {
@@ -159,6 +163,9 @@ func TestStore_GetSOAPData(t *testing.T) {
 		}
 		if data.Observation != "" {
 			t.Errorf("expected empty soap data, got %+v", data)
+		}
+		if data.Translation != "ESV" {
+			t.Errorf("expected default translation ESV, got %s", data.Translation)
 		}
 	})
 }
@@ -179,6 +186,7 @@ func TestStore_SaveSOAPData(t *testing.T) {
 		Application:    "new-app",
 		Prayer:         "new-pry",
 		SelectedVerses: []string{"John 3:16"},
+		Translation:    "NLT",
 	}
 
 	err = s.SaveSOAPData(ctx, 1, soapData)
@@ -186,11 +194,41 @@ func TestStore_SaveSOAPData(t *testing.T) {
 		t.Errorf("expected no error, got %v", err)
 	}
 
+	retrieved, err := s.GetSOAPData(ctx, 1, "2026-02-18")
+	if err != nil {
+		t.Fatalf("failed to get soap data: %v", err)
+	}
+	if retrieved.Translation != "NLT" {
+		t.Errorf("expected translation NLT, got %s", retrieved.Translation)
+	}
+
 	// Verify update
 	soapData.Observation = "updated-obs"
+	soapData.Translation = "MSG"
 	err = s.SaveSOAPData(ctx, 1, soapData)
 	if err != nil {
 		t.Errorf("expected no error on update, got %v", err)
+	}
+
+	retrieved, err = s.GetSOAPData(ctx, 1, "2026-02-18")
+	if err != nil {
+		t.Fatalf("failed to get soap data: %v", err)
+	}
+	if retrieved.Translation != "MSG" {
+		t.Errorf("expected translation MSG, got %s", retrieved.Translation)
+	}
+
+	// Verify UpdateJournalTranslation
+	err = s.UpdateJournalTranslation(ctx, 1, "2026-02-18", "ESV")
+	if err != nil {
+		t.Fatalf("failed to update journal translation: %v", err)
+	}
+	retrieved, err = s.GetSOAPData(ctx, 1, "2026-02-18")
+	if err != nil {
+		t.Fatalf("failed to get soap data: %v", err)
+	}
+	if retrieved.Translation != "ESV" {
+		t.Errorf("expected translation ESV, got %s", retrieved.Translation)
 	}
 }
 

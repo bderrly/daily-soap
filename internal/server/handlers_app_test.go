@@ -13,10 +13,20 @@ import (
 
 type mockStore struct {
 	store.Store
+	savedSOAPData    *store.SOAPData
+	soapDataToReturn *store.SOAPData
 }
 
 func (m *mockStore) GetSOAPData(_ context.Context, _ int64, dateStr string) (*store.SOAPData, error) {
-	return &store.SOAPData{Date: dateStr}, nil
+	if m.soapDataToReturn != nil {
+		return m.soapDataToReturn, nil
+	}
+	return &store.SOAPData{Date: dateStr, Translation: "ESV"}, nil
+}
+
+func (m *mockStore) SaveSOAPData(_ context.Context, _ int64, data *store.SOAPData) error {
+	m.savedSOAPData = data
+	return nil
 }
 
 func (m *mockStore) GetCachedESV(_ context.Context, _ string) (string, error) {
@@ -36,6 +46,10 @@ func (m *mockStore) SaveCachedScripture(_ context.Context, _ string, _ string) e
 }
 
 func (m *mockStore) UpdateUserTranslation(_ context.Context, _ int64, _ string) error {
+	return nil
+}
+
+func (m *mockStore) UpdateJournalTranslation(_ context.Context, _ int64, _, _ string) error {
 	return nil
 }
 
@@ -278,4 +292,76 @@ func TestPostTranslation(t *testing.T) {
 			t.Errorf("expected status 400 bad request, got %d", rr.Code)
 		}
 	})
+}
+
+func TestPostSoap_Translation(t *testing.T) {
+	ms := &mockStore{}
+	app := newTestApplication(t, ms)
+	user := &store.User{ID: 1, Email: "test@example.com", Translation: "ESV"}
+	ctx := context.WithValue(context.Background(), userContextKey, user)
+
+	t.Run("explicit translation saved", func(t *testing.T) {
+		body := `{"date":"2026-05-07","observation":"obs","application":"app","prayer":"pry","translation":"NLT"}`
+		req, _ := http.NewRequestWithContext(ctx, "POST", "/soap", strings.NewReader(body))
+		rr := httptest.NewRecorder()
+		app.postSoap(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", rr.Code)
+		}
+		if ms.savedSOAPData == nil {
+			t.Fatal("expected savedSOAPData not to be nil")
+		}
+		if ms.savedSOAPData.Translation != "NLT" {
+			t.Errorf("expected saved translation NLT, got %s", ms.savedSOAPData.Translation)
+		}
+	})
+
+	t.Run("fallback to user translation if empty", func(t *testing.T) {
+		body := `{"date":"2026-05-07","observation":"obs","application":"app","prayer":"pry","translation":""}`
+		req, _ := http.NewRequestWithContext(ctx, "POST", "/soap", strings.NewReader(body))
+		rr := httptest.NewRecorder()
+		app.postSoap(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", rr.Code)
+		}
+		if ms.savedSOAPData.Translation != "ESV" {
+			t.Errorf("expected fallback translation ESV, got %s", ms.savedSOAPData.Translation)
+		}
+	})
+}
+
+func TestExport_TranslationShortHand(t *testing.T) {
+	ms := &mockStore{
+		soapDataToReturn: &store.SOAPData{
+			Date:           "2026-05-07",
+			Observation:    "my observation",
+			Application:    "my application",
+			Prayer:         "my prayer",
+			SelectedVerses: []string{"01001001"}, // Genesis 1:1
+			Translation:    "NLT",
+		},
+	}
+	app := newTestApplication(t, ms)
+	user := &store.User{ID: 1, Email: "test@example.com", Translation: "ESV"}
+	ctx := context.WithValue(context.Background(), userContextKey, user)
+
+	// Save cached scripture for NLT:Genesis 1:1
+	fakeScripture := `{"query":"Genesis 1:1","passages":["<h2 class=\"extra_text\">Genesis 1:1</h2><p>In the beginning God created the heavens and the earth.</p>"]}`
+	_ = app.store.SaveCachedScripture(ctx, "NLT:Genesis 1:1", fakeScripture)
+
+	body := `{"date":"2026-05-07","format":"html","method":"download"}`
+	req, _ := http.NewRequestWithContext(ctx, "POST", "/export", strings.NewReader(body))
+	rr := httptest.NewRecorder()
+	app.export(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200 OK for export, got %d. Body: %s", rr.Code, rr.Body.String())
+	}
+
+	output := rr.Body.String()
+	if !strings.Contains(output, `<h2 class="extra_text">Genesis 1:1 (NLT)</h2>`) {
+		t.Errorf("expected exported HTML to contain scripture reference with translation short-hand, got: %s", output)
+	}
 }
