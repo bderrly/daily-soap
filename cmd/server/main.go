@@ -22,7 +22,14 @@ import (
 )
 
 func main() {
-	opts := &slog.HandlerOptions{Level: slog.LevelInfo}
+	_ = godotenv.Load()
+
+	level, err := parseLogLevel(os.Getenv("LOG_LEVEL"))
+	if err != nil {
+		slog.Warn("invalid LOG_LEVEL, defaulting to INFO", "level", os.Getenv("LOG_LEVEL"), "error", err)
+	}
+
+	opts := &slog.HandlerOptions{Level: level}
 	handler := slog.NewTextHandler(os.Stderr, opts)
 	slog.SetDefault(slog.New(handler))
 
@@ -30,6 +37,17 @@ func main() {
 		slog.Error("application failed", "error", err)
 		os.Exit(1)
 	}
+}
+
+func parseLogLevel(s string) (slog.Level, error) {
+	if s == "" {
+		return slog.LevelInfo, nil
+	}
+	var lvl slog.Level
+	if err := lvl.UnmarshalText([]byte(s)); err != nil {
+		return slog.LevelInfo, fmt.Errorf("unmarshaling log level: %w", err)
+	}
+	return lvl, nil
 }
 
 func run() error {
