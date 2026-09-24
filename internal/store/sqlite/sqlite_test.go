@@ -164,8 +164,8 @@ func TestStore_GetSOAPData(t *testing.T) {
 		if data.Observation != "" {
 			t.Errorf("expected empty soap data, got %+v", data)
 		}
-		if data.Translation != "ESV" {
-			t.Errorf("expected default translation ESV, got %s", data.Translation)
+		if data.Translation != "" {
+			t.Errorf("expected empty translation for non-existent data, got %s", data.Translation)
 		}
 	})
 }

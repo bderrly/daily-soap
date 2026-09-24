@@ -152,6 +152,11 @@ func (app *application) getSoap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if soapData.Translation == "" {
+		soapData.Translation = user.Translation
+	}
+	soapData.Translation = normalizeTranslation(soapData.Translation)
+
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(soapData); err != nil {
 		slog.Error("failed to encode SOAP data", "error", err)
@@ -534,20 +539,19 @@ func (app *application) postTranslation(w http.ResponseWriter, r *http.Request) 
 	if dateStr == "" {
 		dateStr = r.FormValue("date")
 	}
-	if dateStr != "" {
-		if err := app.store.UpdateJournalTranslation(r.Context(), user.ID, dateStr, translation); err != nil {
-			slog.Warn("failed to update journal translation on translation change", "error", err, "userID", user.ID, "date", dateStr)
+	if dateStr == "" {
+		loc, err := time.LoadLocation(user.Timezone)
+		if err != nil {
+			loc = time.UTC
 		}
+		dateStr = time.Now().In(loc).Format(time.DateOnly)
+	}
+
+	if err := app.store.UpdateJournalTranslation(r.Context(), user.ID, dateStr, translation); err != nil {
+		slog.Warn("failed to update journal translation on translation change", "error", err, "userID", user.ID, "date", dateStr)
 	}
 
 	if isHTMXRequest(r) {
-		if dateStr == "" {
-			loc, err := time.LoadLocation(user.Timezone)
-			if err != nil {
-				loc = time.UTC
-			}
-			dateStr = time.Now().In(loc).Format(time.DateOnly)
-		}
 		r.URL.Path = "/"
 		r.URL.RawQuery = "date=" + dateStr
 		app.home(w, r)

@@ -66,7 +66,7 @@ func (s *Store) GetSOAPData(ctx context.Context, userID int64, dateStr string) (
 	if err != nil {
 		if err == sql.ErrNoRows {
 			soapData.SelectedVerses = []string{}
-			soapData.Translation = "ESV"
+			soapData.Translation = ""
 			return &soapData, nil
 		}
 		return nil, fmt.Errorf("retrieving SOAP journal data: %w", err)
@@ -75,7 +75,7 @@ func (s *Store) GetSOAPData(ctx context.Context, userID int64, dateStr string) (
 	if translation.Valid && translation.String != "" {
 		soapData.Translation = translation.String
 	} else {
-		soapData.Translation = "ESV"
+		soapData.Translation = ""
 	}
 
 	if selectedVersesJSON.Valid && selectedVersesJSON.String != "" {
@@ -114,7 +114,7 @@ func (s *Store) GetSOAPDataRange(ctx context.Context, userID int64, startDate st
 		if translation.Valid && translation.String != "" {
 			soapData.Translation = translation.String
 		} else {
-			soapData.Translation = "ESV"
+			soapData.Translation = ""
 		}
 		if selectedVersesJSON.Valid && selectedVersesJSON.String != "" {
 			if err := json.Unmarshal([]byte(selectedVersesJSON.String), &soapData.SelectedVerses); err != nil {

@@ -21,7 +21,7 @@ func (m *mockStore) GetSOAPData(_ context.Context, _ int64, dateStr string) (*st
 	if m.soapDataToReturn != nil {
 		return m.soapDataToReturn, nil
 	}
-	return &store.SOAPData{Date: dateStr, Translation: "ESV"}, nil
+	return &store.SOAPData{Date: dateStr, Translation: ""}, nil
 }
 
 func (m *mockStore) SaveSOAPData(_ context.Context, _ int64, data *store.SOAPData) error {
@@ -49,7 +49,10 @@ func (m *mockStore) UpdateUserTranslation(_ context.Context, _ int64, _ string) 
 	return nil
 }
 
-func (m *mockStore) UpdateJournalTranslation(_ context.Context, _ int64, _, _ string) error {
+func (m *mockStore) UpdateJournalTranslation(_ context.Context, _ int64, _, trans string) error {
+	if m.soapDataToReturn != nil {
+		m.soapDataToReturn.Translation = trans
+	}
 	return nil
 }
 
@@ -267,10 +270,10 @@ func TestPostTranslation(t *testing.T) {
 	})
 
 	t.Run("htmx translation update", func(t *testing.T) {
-		fakeRef := "ESV:Psalm 1;Genesis 1:1–2:3;Matthew 1:1–17"
-		_ = app.store.SaveCachedScripture(ctx, fakeRef, `{"passages":["<p>Test</p>"]}`)
+		fakeRef := "NLT:Psalm 1;Genesis 1:1–2:3;Matthew 1:1–17"
+		_ = app.store.SaveCachedScripture(ctx, fakeRef, `{"passages":["<p>Test NLT</p>"]}`)
 
-		req, _ := http.NewRequestWithContext(ctx, "POST", "/translation?date=2026-01-01&translation=ESV", nil)
+		req, _ := http.NewRequestWithContext(ctx, "POST", "/translation?date=2026-01-01&translation=NLT", nil)
 		req.Header.Set("HX-Request", "true")
 		rr := httptest.NewRecorder()
 		app.postTranslation(rr, req)
@@ -278,8 +281,15 @@ func TestPostTranslation(t *testing.T) {
 		if rr.Code != http.StatusOK {
 			t.Errorf("expected status 200 OK for HTMX translation update, got %d", rr.Code)
 		}
-		if !strings.Contains(rr.Body.String(), `id="content-container"`) {
-			t.Errorf("expected rendered content container in HTMX response, got: %s", rr.Body.String())
+		body := rr.Body.String()
+		if !strings.Contains(body, `id="content-container"`) {
+			t.Errorf("expected rendered content container in HTMX response, got: %s", body)
+		}
+		if !strings.Contains(body, `data-translation="NLT"`) {
+			t.Errorf("expected data-translation='NLT' in HTMX response, got: %s", body)
+		}
+		if !strings.Contains(body, `<p>Mocked Verse</p>`) {
+			t.Errorf("expected rendered passage in HTMX response, got: %s", body)
 		}
 	})
 
