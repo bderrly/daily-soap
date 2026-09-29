@@ -388,6 +388,13 @@ document.body.addEventListener('htmx:afterSwap', function (evt) {
     }
 });
 
+// Listen for HTMX settle to ensure verse reference display is preserved
+document.body.addEventListener('htmx:afterSettle', function (evt) {
+    if (evt.target.id === 'content-container' || evt.target.classList?.contains('verses-section')) {
+        updateVerseReference();
+    }
+});
+
 // Configure HTMX to include CSRF token
 document.body.addEventListener('htmx:configRequest', (event) => {
     if (window.SOAP_DATA?.csrfToken) {

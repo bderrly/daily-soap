@@ -221,6 +221,10 @@ p:not(.line) {
     display: none;
 }
 
+.selected-verses-reference:not(:empty) {
+    display: block;
+}
+
 .soap-field {
     margin-bottom: 1.5rem;
 }

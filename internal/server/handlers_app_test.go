@@ -125,6 +125,65 @@ func TestHandleIndex_DateQueryParam_Verification(t *testing.T) {
 	}
 }
 
+func TestHandleIndex_SelectedVersesReferenceStyle(t *testing.T) {
+	user := &store.User{
+		ID:       1,
+		Email:    "test@example.com",
+		Timezone: "UTC",
+	}
+	ctx := context.WithValue(context.Background(), userContextKey, user)
+	ctx = context.WithValue(ctx, csrfContextKey, "test-csrf")
+	ctx = context.WithValue(ctx, nonceContextKey, "test-nonce")
+
+	t.Run("with selected verses", func(t *testing.T) {
+		mock := &mockStore{
+			soapDataToReturn: &store.SOAPData{
+				Date:           "2026-05-07",
+				SelectedVerses: []string{"19001001"},
+			},
+		}
+		app := newTestApplication(t, mock)
+
+		req, _ := http.NewRequestWithContext(ctx, "GET", "/?date=2026-05-07", nil)
+		req.Header.Set("HX-Request", "true")
+		rr := httptest.NewRecorder()
+		app.home(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected status OK, got %d", rr.Code)
+		}
+		body := rr.Body.String()
+		expected := `<div class="selected-verses-reference" id="selectedVersesReference" style="display: block;"></div>`
+		if !strings.Contains(body, expected) {
+			t.Errorf("expected body to contain %q, but got %s", expected, body)
+		}
+	})
+
+	t.Run("without selected verses", func(t *testing.T) {
+		mock := &mockStore{
+			soapDataToReturn: &store.SOAPData{
+				Date:           "2026-05-07",
+				SelectedVerses: []string{},
+			},
+		}
+		app := newTestApplication(t, mock)
+
+		req, _ := http.NewRequestWithContext(ctx, "GET", "/?date=2026-05-07", nil)
+		req.Header.Set("HX-Request", "true")
+		rr := httptest.NewRecorder()
+		app.home(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected status OK, got %d", rr.Code)
+		}
+		body := rr.Body.String()
+		expected := `<div class="selected-verses-reference" id="selectedVersesReference"></div>`
+		if !strings.Contains(body, expected) {
+			t.Errorf("expected body to contain %q, but got %s", expected, body)
+		}
+	})
+}
+
 func (m *mockStore) GetSOAPDataRange(_ context.Context, _ int64, _, _ string) ([]*store.SOAPData, error) {
 	return []*store.SOAPData{}, nil
 }

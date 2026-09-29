@@ -618,4 +618,60 @@ Deno.test("verse reference and save payload include translation shorthand", { sa
   assertEquals(referenceDiv.textContent, "Genesis 2:17 (MSG)", "Reference should update to (MSG) translation");
 });
 
+Deno.test("HTMX afterSettle preserves selectedVersesReference display", { sanitizeOps: false, sanitizeResources: false }, async () => {
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <body>
+        <div class="content-wrapper" id="content-container" data-date="2026-07-01" data-selected-verses='["01002017"]' data-translation="NLT">
+          <div class="verses-section">
+            <div class="daily-reading">
+              <div class="passages">
+                <div class="verse-content">
+                  <p><span class="verse" data-ref="01002017"><b class="verse-num">17</b>but of the tree...</span></p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="selected-verses-reference" id="selectedVersesReference"></div>
+          <textarea id="observation"></textarea>
+          <textarea id="application"></textarea>
+          <textarea id="prayer"></textarea>
+          <div id="saveStatus"></div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const { window, document, Node } = parseHTML(html);
+
+  window.Node = Node;
+  window.SOAP_DATA = {
+    csrfToken: "test-token",
+    translation: "NLT"
+  };
+  window.Intl = {
+    DateTimeFormat: () => ({
+      resolvedOptions: () => ({ timeZone: "UTC" })
+    })
+  };
+  window.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+
+  await loadApp(window);
+
+  const referenceDiv = document.getElementById("selectedVersesReference");
+  assertExists(referenceDiv, "Reference div should exist");
+
+  // Simulate HTMX settle wiping the inline style (as happened during attribute settling)
+  referenceDiv.style.display = "";
+
+  // Dispatch htmx:afterSettle event
+  const container = document.getElementById("content-container");
+  const settleEvent = new window.Event("htmx:afterSettle", { bubbles: true, cancelable: true });
+  container.dispatchEvent(settleEvent);
+
+  assertEquals(referenceDiv.textContent, "Genesis 2:17 (NLT)", "Reference text should be updated");
+  assertEquals(referenceDiv.style.display, "block", "Reference display should be block after settle");
+});
+
 

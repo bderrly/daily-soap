@@ -1,6 +1,6 @@
 {{define "partial:soap"}}
 <div class="soap-section">
-    <div class="selected-verses-reference" id="selectedVersesReference"></div>
+    <div class="selected-verses-reference" id="selectedVersesReference"{{if .selectedVerses}} style="display: block;"{{end}}></div>
     <div class="soap-field soap-field-expandable">
         <label for="observation">Observation</label>
         <textarea id="observation" name="observation" rows="5"
