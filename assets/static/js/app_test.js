@@ -28,6 +28,14 @@ async function loadApp(window) {
   );
 }
 
+// Helper to create document from generated template fixture
+async function loadFixtureDocument() {
+  const fixtureUrl = new URL("./fixtures/home_content.html", import.meta.url);
+  const fixtureHtml = await Deno.readTextFile(fixtureUrl);
+  const html = `<!DOCTYPE html><html><body>${fixtureHtml}</body></html>`;
+  return parseHTML(html);
+}
+
 Deno.test("verse highlighting - valid highlighting", { sanitizeOps: false, sanitizeResources: false }, async () => {
   const html = `
     <!DOCTYPE html>
@@ -619,31 +627,7 @@ Deno.test("verse reference and save payload include translation shorthand", { sa
 });
 
 Deno.test("HTMX afterSettle preserves selectedVersesReference display", { sanitizeOps: false, sanitizeResources: false }, async () => {
-  const html = `
-    <!DOCTYPE html>
-    <html>
-      <body>
-        <div class="content-wrapper" id="content-container" data-date="2026-07-01" data-selected-verses='["01002017"]' data-translation="NLT">
-          <div class="verses-section">
-            <div class="daily-reading">
-              <div class="passages">
-                <div class="verse-content">
-                  <p><span class="verse" data-ref="01002017"><b class="verse-num">17</b>but of the tree...</span></p>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="selected-verses-reference" id="selectedVersesReference"></div>
-          <textarea id="observation"></textarea>
-          <textarea id="application"></textarea>
-          <textarea id="prayer"></textarea>
-          <div id="saveStatus"></div>
-        </div>
-      </body>
-    </html>
-  `;
-
-  const { window, document, Node } = parseHTML(html);
+  const { window, document, Node } = await loadFixtureDocument();
 
   window.Node = Node;
   window.SOAP_DATA = {
@@ -661,6 +645,9 @@ Deno.test("HTMX afterSettle preserves selectedVersesReference display", { saniti
 
   const referenceDiv = document.getElementById("selectedVersesReference");
   assertExists(referenceDiv, "Reference div should exist");
+
+  // Verify that the template rendered style="display: block;" because selectedVerses has items
+  assertEquals(referenceDiv.style.display, "block", "Template should render display: block when selectedVerses is populated");
 
   // Simulate HTMX settle wiping the inline style (as happened during attribute settling)
   referenceDiv.style.display = "";

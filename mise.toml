@@ -18,6 +18,10 @@ run = "golangci-lint run"
 description = "Run all formatting and linting tasks"
 depends = ["gofumpt", "lint"]
 
+[tasks.fixtures]
+description = "Generate test HTML fixtures from templates"
+run = "UPDATE_FIXTURES=1 go test -v -run TestFixturesUpToDate ./internal/server"
+
 [tasks.vendor]
 description = "Download vendored frontend libraries"
 run = """
