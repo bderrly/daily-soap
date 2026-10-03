@@ -1,6 +1,7 @@
 # Design: Admin Notification on New User Verification
 
 ## Purpose
+
 Send an email to an admin when a new user signs up and successfully verifies their account. The recipient email address should be configurable via an environment variable.
 
 ## Architecture & Data Flow
@@ -25,9 +26,11 @@ Send an email to an admin when a new user signs up and successfully verifies the
    - Call `appStore.QueueEmail` to schedule the email for sending via the background worker.
 
 ## Error Handling
+
 - If the `ADMIN_EMAIL` environment variable is not set, no email will be queued (silent bypass).
 - If queuing the notification email fails, an error will be logged via `slog.Error`, but it will not prevent the user from seeing the success page for their verification.
 
 ## Testing
+
 - Update any existing unit tests for `store.Store.ConfirmUser` to reflect the new signature and return values.
 - Update tests for `handleConfirm` to ensure it still correctly handles valid and invalid tokens with the new `ConfirmUser` behavior.

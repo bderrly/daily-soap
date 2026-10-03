@@ -63,7 +63,7 @@
 
 {{define "home:content"}}
     <div class="content-wrapper" id="content-container" data-date="{{.date}}" data-selected-verses="{{if .selectedVerses}}{{.selectedVerses | toJSON}}{{else}}[]{{end}}" data-translation="{{.translation}}">
-        {{template "partial:reading" .}}
-        {{template "partial:soap" .}}
+        {{- template "partial:reading" .}}
+        {{- template "partial:soap" .}}
     </div>
 {{end}}

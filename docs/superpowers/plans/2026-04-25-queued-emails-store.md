@@ -13,6 +13,7 @@
 ### Task 1: Update `internal/store/store.go`
 
 **Files:**
+
 - Modify: `internal/store/store.go`
 
 - [ ] **Step 1: Add `QueuedEmail` struct**
@@ -58,6 +59,7 @@ git commit -m "store: add QueuedEmail struct and Store interface methods"
 ### Task 2: Update `internal/store/sqlite/sqlite_test.go` Schema
 
 **Files:**
+
 - Modify: `internal/store/sqlite/sqlite_test.go`
 
 - [ ] **Step 1: Update `setupTestDB` schema**
@@ -91,6 +93,7 @@ git commit -m "test: update test schema to include queued_emails"
 ### Task 3: Implement `QueueEmail` in `internal/store/sqlite/sqlite.go`
 
 **Files:**
+
 - Modify: `internal/store/sqlite/sqlite.go`
 - Test: `internal/store/sqlite/sqlite_test.go`
 
@@ -176,6 +179,7 @@ git commit -m "store/sqlite: implement QueueEmail"
 ### Task 4: Implement `GetPendingEmails` in `internal/store/sqlite/sqlite.go`
 
 **Files:**
+
 - Modify: `internal/store/sqlite/sqlite.go`
 - Test: `internal/store/sqlite/sqlite_test.go`
 
@@ -265,6 +269,7 @@ git commit -m "store/sqlite: implement GetPendingEmails"
 ### Task 5: Implement `UpdateEmailStatus` and `MarkEmailSent` in `internal/store/sqlite/sqlite.go`
 
 **Files:**
+
 - Modify: `internal/store/sqlite/sqlite.go`
 - Test: `internal/store/sqlite/sqlite_test.go`
 

@@ -1,10 +1,18 @@
 [tools]
 deno = "2.9.7"
+"github:betterleaks/betterleaks" = "v1.9.0"
 "github:bokwoon95/wgo" = "v0.7.1"
 "github:pressly/goose" = "v3.28.0"
 go = "1.25"
 gofumpt = "v0.12.0"
 golangci-lint = "v2.13.2"
+hk = "latest"
+node = "latest"
+oxfmt = "latest"
+oxlint = "latest"
+shellcheck = "latest"
+shellharden = "latest"
+shfmt = "latest"
 
 [tasks.gofumpt]
 description = "Format Go code using gofumpt"
@@ -42,3 +50,5 @@ echo "Starting server..."
 CGO_ENABLED=1 wgo run -file .go -file .css -file .html -file .gotmpl -file .js ./cmd/server
 """
 
+[tasks.pre-commit]
+run = "hk run pre-commit"

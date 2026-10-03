@@ -11,9 +11,16 @@ async function loadApp(window) {
 
   // Wrap in a function to pass window as global
   const fn = new Function(
-    "window", "document", "Intl", "fetch", "Node", "setTimeout", "clearTimeout",
-    "formatVerseReference", "parseVerseId",
-    code
+    "window",
+    "document",
+    "Intl",
+    "fetch",
+    "Node",
+    "setTimeout",
+    "clearTimeout",
+    "formatVerseReference",
+    "parseVerseId",
+    code,
   );
   fn(
     window,
@@ -24,7 +31,7 @@ async function loadApp(window) {
     window.setTimeout,
     window.clearTimeout,
     logic.formatVerseReference,
-    logic.parseVerseId
+    logic.parseVerseId,
   );
 }
 
@@ -36,8 +43,11 @@ async function loadFixtureDocument() {
   return parseHTML(html);
 }
 
-Deno.test("verse highlighting - valid highlighting", { sanitizeOps: false, sanitizeResources: false }, async () => {
-  const html = `
+Deno.test(
+  "verse highlighting - valid highlighting",
+  { sanitizeOps: false, sanitizeResources: false },
+  async () => {
+    const html = `
     <!DOCTYPE html>
     <html>
       <body>
@@ -59,43 +69,47 @@ Deno.test("verse highlighting - valid highlighting", { sanitizeOps: false, sanit
     </html>
   `;
 
-  const { window, document, Node } = parseHTML(html);
+    const { window, document, Node } = parseHTML(html);
 
-  // Mock globals
-  window.Node = Node;
-  window.SOAP_DATA = {
-    date: "2026-03-07",
-    selectedVerses: [],
-    csrfToken: "test-token"
-  };
-  window.Intl = {
-    DateTimeFormat: () => ({
-      resolvedOptions: () => ({ timeZone: "UTC" })
-    })
-  };
-  window.fetch = () => Promise.resolve({ json: () => Promise.resolve({}) });
+    // Mock globals
+    window.Node = Node;
+    window.SOAP_DATA = {
+      date: "2026-03-07",
+      selectedVerses: [],
+      csrfToken: "test-token",
+    };
+    window.Intl = {
+      DateTimeFormat: () => ({
+        resolvedOptions: () => ({ timeZone: "UTC" }),
+      }),
+    };
+    window.fetch = () => Promise.resolve({ json: () => Promise.resolve({}) });
 
-  // Load app.js
-  await loadApp(window);
+    // Load app.js
+    await loadApp(window);
 
-  // Find the verse and click it
-  const verseSpan = document.querySelector('[data-ref="01002017"]');
-  assertExists(verseSpan, "Verse span should exist");
+    // Find the verse and click it
+    const verseSpan = document.querySelector('[data-ref="01002017"]');
+    assertExists(verseSpan, "Verse span should exist");
 
-  const event = new window.Event("click", {
-    bubbles: true,
-    cancelable: true
-  });
+    const event = new window.Event("click", {
+      bubbles: true,
+      cancelable: true,
+    });
 
-  verseSpan.dispatchEvent(event);
+    verseSpan.dispatchEvent(event);
 
-  // Check if it's highlighted
-  const isHighlighted = verseSpan.classList.contains("verse-selected");
-  assertEquals(isHighlighted, true, "Verse should be highlighted");
-});
+    // Check if it's highlighted
+    const isHighlighted = verseSpan.classList.contains("verse-selected");
+    assertEquals(isHighlighted, true, "Verse should be highlighted");
+  },
+);
 
-Deno.test("verse highlighting - clicking verse number highlights verse", { sanitizeOps: false, sanitizeResources: false }, async () => {
-  const html = `
+Deno.test(
+  "verse highlighting - clicking verse number highlights verse",
+  { sanitizeOps: false, sanitizeResources: false },
+  async () => {
+    const html = `
     <!DOCTYPE html>
     <html>
       <body>
@@ -117,34 +131,42 @@ Deno.test("verse highlighting - clicking verse number highlights verse", { sanit
     </html>
   `;
 
-  const { window, document, Node } = parseHTML(html);
+    const { window, document, Node } = parseHTML(html);
 
-  window.Node = Node;
-  window.SOAP_DATA = {
-    date: "2026-03-07",
-    selectedVerses: [],
-    csrfToken: "test-token"
-  };
-  window.Intl = {
-    DateTimeFormat: () => ({
-      resolvedOptions: () => ({ timeZone: "UTC" })
-    })
-  };
-  window.fetch = () => Promise.resolve({ json: () => Promise.resolve({}) });
+    window.Node = Node;
+    window.SOAP_DATA = {
+      date: "2026-03-07",
+      selectedVerses: [],
+      csrfToken: "test-token",
+    };
+    window.Intl = {
+      DateTimeFormat: () => ({
+        resolvedOptions: () => ({ timeZone: "UTC" }),
+      }),
+    };
+    window.fetch = () => Promise.resolve({ json: () => Promise.resolve({}) });
 
-  await loadApp(window);
+    await loadApp(window);
 
-  const verseNum = document.querySelector('.verse-num');
-  assertExists(verseNum, "Verse number should exist");
+    const verseNum = document.querySelector(".verse-num");
+    assertExists(verseNum, "Verse number should exist");
 
-  verseNum.dispatchEvent(new window.Event("click", { bubbles: true, cancelable: true }));
+    verseNum.dispatchEvent(new window.Event("click", { bubbles: true, cancelable: true }));
 
-  const verseSpan = document.querySelector('[data-ref="01002017"]');
-  assertEquals(verseSpan.classList.contains("verse-selected"), true, "Verse should be highlighted when clicking verse number");
-});
+    const verseSpan = document.querySelector('[data-ref="01002017"]');
+    assertEquals(
+      verseSpan.classList.contains("verse-selected"),
+      true,
+      "Verse should be highlighted when clicking verse number",
+    );
+  },
+);
 
-Deno.test("verse highlighting - clicking non-verse areas does not highlight", { sanitizeOps: false, sanitizeResources: false }, async () => {
-  const html = `
+Deno.test(
+  "verse highlighting - clicking non-verse areas does not highlight",
+  { sanitizeOps: false, sanitizeResources: false },
+  async () => {
+    const html = `
     <!DOCTYPE html>
     <html>
       <body>
@@ -168,43 +190,59 @@ Deno.test("verse highlighting - clicking non-verse areas does not highlight", { 
     </html>
   `;
 
-  const { window, document, Node } = parseHTML(html);
+    const { window, document, Node } = parseHTML(html);
 
-  window.Node = Node;
-  window.SOAP_DATA = {
-    date: "2026-03-07",
-    selectedVerses: [],
-    csrfToken: "test-token"
-  };
-  window.Intl = {
-    DateTimeFormat: () => ({
-      resolvedOptions: () => ({ timeZone: "UTC" })
-    })
-  };
-  window.fetch = () => Promise.resolve({ json: () => Promise.resolve({}) });
+    window.Node = Node;
+    window.SOAP_DATA = {
+      date: "2026-03-07",
+      selectedVerses: [],
+      csrfToken: "test-token",
+    };
+    window.Intl = {
+      DateTimeFormat: () => ({
+        resolvedOptions: () => ({ timeZone: "UTC" }),
+      }),
+    };
+    window.fetch = () => Promise.resolve({ json: () => Promise.resolve({}) });
 
-  await loadApp(window);
+    await loadApp(window);
 
-  const verseSpan = document.querySelector('[data-ref="01002017"]');
+    const verseSpan = document.querySelector('[data-ref="01002017"]');
 
-  // Click on paragraph (empty space outside the verse span)
-  const para = document.getElementById('para');
-  para.dispatchEvent(new window.Event("click", { bubbles: true, cancelable: true }));
-  assertEquals(verseSpan.classList.contains("verse-selected"), false, "Verse should NOT be highlighted when clicking paragraph space");
+    // Click on paragraph (empty space outside the verse span)
+    const para = document.getElementById("para");
+    para.dispatchEvent(new window.Event("click", { bubbles: true, cancelable: true }));
+    assertEquals(
+      verseSpan.classList.contains("verse-selected"),
+      false,
+      "Verse should NOT be highlighted when clicking paragraph space",
+    );
 
-  // Click on header
-  const h2 = document.querySelector('h2');
-  h2.dispatchEvent(new window.Event("click", { bubbles: true, cancelable: true }));
-  assertEquals(verseSpan.classList.contains("verse-selected"), false, "Verse should NOT be highlighted when clicking header");
+    // Click on header
+    const h2 = document.querySelector("h2");
+    h2.dispatchEvent(new window.Event("click", { bubbles: true, cancelable: true }));
+    assertEquals(
+      verseSpan.classList.contains("verse-selected"),
+      false,
+      "Verse should NOT be highlighted when clicking header",
+    );
 
-  // Click on copyright
-  const copyright = document.getElementById('copyright');
-  copyright.dispatchEvent(new window.Event("click", { bubbles: true, cancelable: true }));
-  assertEquals(verseSpan.classList.contains("verse-selected"), false, "Verse should NOT be highlighted when clicking copyright");
-});
+    // Click on copyright
+    const copyright = document.getElementById("copyright");
+    copyright.dispatchEvent(new window.Event("click", { bubbles: true, cancelable: true }));
+    assertEquals(
+      verseSpan.classList.contains("verse-selected"),
+      false,
+      "Verse should NOT be highlighted when clicking copyright",
+    );
+  },
+);
 
-Deno.test("verse highlighting - text selection does not trigger verse toggle", { sanitizeOps: false, sanitizeResources: false }, async () => {
-  const html = `
+Deno.test(
+  "verse highlighting - text selection does not trigger verse toggle",
+  { sanitizeOps: false, sanitizeResources: false },
+  async () => {
+    const html = `
     <!DOCTYPE html>
     <html>
       <body>
@@ -226,40 +264,48 @@ Deno.test("verse highlighting - text selection does not trigger verse toggle", {
     </html>
   `;
 
-  const { window, document, Node } = parseHTML(html);
+    const { window, document, Node } = parseHTML(html);
 
-  window.Node = Node;
-  window.SOAP_DATA = {
-    date: "2026-03-07",
-    selectedVerses: [],
-    csrfToken: "test-token"
-  };
-  window.Intl = {
-    DateTimeFormat: () => ({
-      resolvedOptions: () => ({ timeZone: "UTC" })
-    })
-  };
-  window.fetch = () => Promise.resolve({ json: () => Promise.resolve({}) });
+    window.Node = Node;
+    window.SOAP_DATA = {
+      date: "2026-03-07",
+      selectedVerses: [],
+      csrfToken: "test-token",
+    };
+    window.Intl = {
+      DateTimeFormat: () => ({
+        resolvedOptions: () => ({ timeZone: "UTC" }),
+      }),
+    };
+    window.fetch = () => Promise.resolve({ json: () => Promise.resolve({}) });
 
-  try {
-    // Mock active selection
-    window.getSelection = () => ({
-      toString: () => "but of the tree"
-    });
+    try {
+      // Mock active selection
+      window.getSelection = () => ({
+        toString: () => "but of the tree",
+      });
 
-    await loadApp(window);
+      await loadApp(window);
 
-    const verseSpan = document.querySelector('[data-ref="01002017"]');
-    verseSpan.dispatchEvent(new window.Event("click", { bubbles: true, cancelable: true }));
+      const verseSpan = document.querySelector('[data-ref="01002017"]');
+      verseSpan.dispatchEvent(new window.Event("click", { bubbles: true, cancelable: true }));
 
-    assertEquals(verseSpan.classList.contains("verse-selected"), false, "Verse should NOT be highlighted when text was selected");
-  } finally {
-    delete window.getSelection;
-  }
-});
+      assertEquals(
+        verseSpan.classList.contains("verse-selected"),
+        false,
+        "Verse should NOT be highlighted when text was selected",
+      );
+    } finally {
+      delete window.getSelection;
+    }
+  },
+);
 
-Deno.test("export modal - method change logic", { sanitizeOps: false, sanitizeResources: false }, async () => {
-  const html = `
+Deno.test(
+  "export modal - method change logic",
+  { sanitizeOps: false, sanitizeResources: false },
+  async () => {
+    const html = `
     <!DOCTYPE html>
     <html>
       <body>
@@ -294,57 +340,61 @@ Deno.test("export modal - method change logic", { sanitizeOps: false, sanitizeRe
     </html>
   `;
 
-  const { window, document, Node } = parseHTML(html);
+    const { window, document, Node } = parseHTML(html);
 
-  // Mock globals
-  window.Node = Node;
-  window.SOAP_DATA = {
-    date: "2026-03-07",
-    selectedVerses: [],
-    csrfToken: "test-token"
-  };
-  window.Intl = {
-    DateTimeFormat: () => ({
-      resolvedOptions: () => ({ timeZone: "UTC" })
-    })
-  };
-  window.fetch = () => Promise.resolve({ json: () => Promise.resolve({}) });
+    // Mock globals
+    window.Node = Node;
+    window.SOAP_DATA = {
+      date: "2026-03-07",
+      selectedVerses: [],
+      csrfToken: "test-token",
+    };
+    window.Intl = {
+      DateTimeFormat: () => ({
+        resolvedOptions: () => ({ timeZone: "UTC" }),
+      }),
+    };
+    window.fetch = () => Promise.resolve({ json: () => Promise.resolve({}) });
 
-  // Load app.js
-  await loadApp(window);
+    // Load app.js
+    await loadApp(window);
 
-  const emailCard = document.getElementById('email-card');
-  const methodInput = document.getElementById('export-method');
-  const recipientsGroup = document.getElementById('recipients-group');
-  const markdownCard = document.getElementById('format-markdown');
+    const emailCard = document.getElementById("email-card");
+    const methodInput = document.getElementById("export-method");
+    const recipientsGroup = document.getElementById("recipients-group");
+    const markdownCard = document.getElementById("format-markdown");
 
-  // Initial state
-  assertEquals(methodInput.value, 'download');
-  assertEquals(recipientsGroup.style.display, 'none');
-  // Linkedom might return undefined or empty string for unassigned style property
-  const initialDisplay = markdownCard.style.display;
-  if (initialDisplay !== undefined) {
-    assertEquals(initialDisplay, '');
-  }
+    // Initial state
+    assertEquals(methodInput.value, "download");
+    assertEquals(recipientsGroup.style.display, "none");
+    // Linkedom might return undefined or empty string for unassigned style property
+    const initialDisplay = markdownCard.style.display;
+    if (initialDisplay !== undefined) {
+      assertEquals(initialDisplay, "");
+    }
 
-  // Click Email card
-  emailCard.dispatchEvent(new window.Event("click", { bubbles: true }));
+    // Click Email card
+    emailCard.dispatchEvent(new window.Event("click", { bubbles: true }));
 
-  assertEquals(methodInput.value, 'email');
-  assertEquals(recipientsGroup.style.display, 'block');
-  assertEquals(markdownCard.style.display, 'none');
+    assertEquals(methodInput.value, "email");
+    assertEquals(recipientsGroup.style.display, "block");
+    assertEquals(markdownCard.style.display, "none");
 
-  // Click Download card
-  const downloadCard = document.querySelector('.option-card[data-value="download"]');
-  downloadCard.dispatchEvent(new window.Event("click", { bubbles: true }));
+    // Click Download card
+    const downloadCard = document.querySelector('.option-card[data-value="download"]');
+    downloadCard.dispatchEvent(new window.Event("click", { bubbles: true }));
 
-  assertEquals(methodInput.value, 'download');
-  assertEquals(recipientsGroup.style.display, 'none');
-  assertEquals(markdownCard.style.display, 'flex');
-});
+    assertEquals(methodInput.value, "download");
+    assertEquals(recipientsGroup.style.display, "none");
+    assertEquals(markdownCard.style.display, "flex");
+  },
+);
 
-Deno.test("HTMX swap updates currentDate and selectedVerseIds correctly", { sanitizeOps: false, sanitizeResources: false }, async () => {
-  const html = `
+Deno.test(
+  "HTMX swap updates currentDate and selectedVerseIds correctly",
+  { sanitizeOps: false, sanitizeResources: false },
+  async () => {
+    const html = `
     <!DOCTYPE html>
     <html>
       <body>
@@ -369,67 +419,75 @@ Deno.test("HTMX swap updates currentDate and selectedVerseIds correctly", { sani
     </html>
   `;
 
-  const { window, document, Node } = parseHTML(html);
+    const { window, document, Node } = parseHTML(html);
 
-  // Mock globals
-  window.Node = Node;
-  window.SOAP_DATA = {
-    csrfToken: "test-token"
-  };
-  window.Intl = {
-    DateTimeFormat: () => ({
-      resolvedOptions: () => ({ timeZone: "UTC" })
-    })
-  };
+    // Mock globals
+    window.Node = Node;
+    window.SOAP_DATA = {
+      csrfToken: "test-token",
+    };
+    window.Intl = {
+      DateTimeFormat: () => ({
+        resolvedOptions: () => ({ timeZone: "UTC" }),
+      }),
+    };
 
-  let lastPayload = null;
-  window.fetch = (url, options) => {
-    if (url === '/soap' && options.method === 'POST') {
-      lastPayload = JSON.parse(options.body);
-    }
-    return Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve({ status: "success" })
+    let lastPayload = null;
+    window.fetch = (url, options) => {
+      if (url === "/soap" && options.method === "POST") {
+        lastPayload = JSON.parse(options.body);
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ status: "success" }),
+      });
+    };
+
+    // Load app.js
+    await loadApp(window);
+
+    // Simulate HTMX swap: update attributes on #content-container and dispatch htmx:afterSwap
+    const container = document.getElementById("content-container");
+    assertExists(container, "Container should exist");
+
+    container.setAttribute("data-date", "2026-06-26");
+    container.setAttribute("data-selected-verses", "[]");
+
+    const afterSwapEvent = new window.Event("htmx:afterSwap", {
+      bubbles: true,
+      cancelable: true,
     });
-  };
+    container.dispatchEvent(afterSwapEvent);
 
-  // Load app.js
-  await loadApp(window);
+    // Click the verse to trigger a save
+    const verseSpan = document.querySelector('[data-ref="01002017"]');
+    assertExists(verseSpan, "Verse span should exist");
 
-  // Simulate HTMX swap: update attributes on #content-container and dispatch htmx:afterSwap
-  const container = document.getElementById('content-container');
-  assertExists(container, "Container should exist");
+    const clickEvent = new window.Event("click", {
+      bubbles: true,
+      cancelable: true,
+    });
+    verseSpan.dispatchEvent(clickEvent);
 
-  container.setAttribute('data-date', '2026-06-26');
-  container.setAttribute('data-selected-verses', '[]');
+    // Wait for the autosave timeout (1000ms delay + buffer)
+    await new Promise((resolve) => setTimeout(resolve, 1100));
 
-  const afterSwapEvent = new window.Event("htmx:afterSwap", {
-    bubbles: true,
-    cancelable: true
-  });
-  container.dispatchEvent(afterSwapEvent);
+    // Verify that the save payload was sent with the swapped date 2026-06-26
+    assertExists(lastPayload, "A save request should have been sent");
+    assertEquals(lastPayload.date, "2026-06-26", "The date in the payload should be 2026-06-26");
+    assertEquals(
+      lastPayload.selectedVerses,
+      ["01002017"],
+      "The selected verses should include the clicked verse",
+    );
+  },
+);
 
-  // Click the verse to trigger a save
-  const verseSpan = document.querySelector('[data-ref="01002017"]');
-  assertExists(verseSpan, "Verse span should exist");
-
-  const clickEvent = new window.Event("click", {
-    bubbles: true,
-    cancelable: true
-  });
-  verseSpan.dispatchEvent(clickEvent);
-
-  // Wait for the autosave timeout (1000ms delay + buffer)
-  await new Promise(resolve => setTimeout(resolve, 1100));
-
-  // Verify that the save payload was sent with the swapped date 2026-06-26
-  assertExists(lastPayload, "A save request should have been sent");
-  assertEquals(lastPayload.date, '2026-06-26', "The date in the payload should be 2026-06-26");
-  assertEquals(lastPayload.selectedVerses, ['01002017'], "The selected verses should include the clicked verse");
-});
-
-Deno.test("initial load - date parameter in URL", { sanitizeOps: false, sanitizeResources: false }, async () => {
-  const html = `
+Deno.test(
+  "initial load - date parameter in URL",
+  { sanitizeOps: false, sanitizeResources: false },
+  async () => {
+    const html = `
     <!DOCTYPE html>
     <html>
       <body>
@@ -445,36 +503,45 @@ Deno.test("initial load - date parameter in URL", { sanitizeOps: false, sanitize
     </html>
   `;
 
-  const { window, document, Node } = parseHTML(html);
+    const { window, document, Node } = parseHTML(html);
 
-  // Mock globals
-  window.Node = Node;
-  window.SOAP_DATA = {
-    csrfToken: "test-token"
-  };
-  window.Intl = {
-    DateTimeFormat: () => ({
-      resolvedOptions: () => ({ timeZone: "UTC" })
-    })
-  };
-  window.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve({ status: "success" }) });
+    // Mock globals
+    window.Node = Node;
+    window.SOAP_DATA = {
+      csrfToken: "test-token",
+    };
+    window.Intl = {
+      DateTimeFormat: () => ({
+        resolvedOptions: () => ({ timeZone: "UTC" }),
+      }),
+    };
+    window.fetch = () =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve({ status: "success" }) });
 
-  // Mock location to simulate ?date=2026-06-20
-  window.location = {
-    search: "?date=2026-06-20"
-  };
+    // Mock location to simulate ?date=2026-06-20
+    window.location = {
+      search: "?date=2026-06-20",
+    };
 
-  // Load app.js
-  await loadApp(window);
+    // Load app.js
+    await loadApp(window);
 
-  // Verify that date picker value is updated to match URL parameter in init()
-  const datePicker = document.getElementById('date-picker');
-  assertExists(datePicker, "Date picker should exist");
-  assertEquals(datePicker.value, "2026-06-20", "Date picker value should be updated to match URL query parameter");
-});
+    // Verify that date picker value is updated to match URL parameter in init()
+    const datePicker = document.getElementById("date-picker");
+    assertExists(datePicker, "Date picker should exist");
+    assertEquals(
+      datePicker.value,
+      "2026-06-20",
+      "Date picker value should be updated to match URL query parameter",
+    );
+  },
+);
 
-Deno.test("flatpickr initialization and entry encircling", { sanitizeOps: false, sanitizeResources: false }, async () => {
-  const html = `
+Deno.test(
+  "flatpickr initialization and entry encircling",
+  { sanitizeOps: false, sanitizeResources: false },
+  async () => {
+    const html = `
     <!DOCTYPE html>
     <html>
       <body>
@@ -490,62 +557,74 @@ Deno.test("flatpickr initialization and entry encircling", { sanitizeOps: false,
     </html>
   `;
 
-  const { window, document, Node } = parseHTML(html);
+    const { window, document, Node } = parseHTML(html);
 
-  window.Node = Node;
-  window.SOAP_DATA = {
-    csrfToken: "test-token"
-  };
-  window.Intl = {
-    DateTimeFormat: () => ({
-      resolvedOptions: () => ({ timeZone: "UTC" })
-    })
-  };
-
-  // Mock fetch to return dates with entries
-  window.fetch = (url) => {
-    if (typeof url === 'string' && url.includes('/soap/dates')) {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ dates: ["2026-06-15", "2026-06-20"] })
-      });
-    }
-    return Promise.resolve({ ok: true, json: () => Promise.resolve({ status: "success" }) });
-  };
-
-  let capturedConfig = null;
-  window.flatpickr = (element, config) => {
-    capturedConfig = config;
-    return {
-      redraw: () => {},
-      destroy: () => {}
+    window.Node = Node;
+    window.SOAP_DATA = {
+      csrfToken: "test-token",
     };
-  };
+    window.Intl = {
+      DateTimeFormat: () => ({
+        resolvedOptions: () => ({ timeZone: "UTC" }),
+      }),
+    };
 
-  await loadApp(window);
+    // Mock fetch to return dates with entries
+    window.fetch = (url) => {
+      if (typeof url === "string" && url.includes("/soap/dates")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ dates: ["2026-06-15", "2026-06-20"] }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ status: "success" }) });
+    };
 
-  assertExists(capturedConfig, "Flatpickr should have been initialized with config");
-  assertEquals(capturedConfig.dateFormat, "Y-m-d");
-  assertEquals(capturedConfig.minDate, "2026-01-01");
+    let capturedConfig = null;
+    window.flatpickr = (element, config) => {
+      capturedConfig = config;
+      return {
+        redraw: () => {},
+        destroy: () => {},
+      };
+    };
 
-  // Wait a tick for loadEntryDatesForMonth fetch to resolve
-  await new Promise((resolve) => setTimeout(resolve, 50));
+    await loadApp(window);
 
-  // Test onDayCreate with a date that has an entry
-  const dayElemWithEntry = document.createElement("span");
-  dayElemWithEntry.dateObj = new Date(2026, 5, 15); // June 15, 2026
-  capturedConfig.onDayCreate(null, null, null, dayElemWithEntry);
-  assertEquals(dayElemWithEntry.classList.contains("has-journal-entry"), true, "Should have has-journal-entry class");
+    assertExists(capturedConfig, "Flatpickr should have been initialized with config");
+    assertEquals(capturedConfig.dateFormat, "Y-m-d");
+    assertEquals(capturedConfig.minDate, "2026-01-01");
 
-  // Test onDayCreate with a date without an entry
-  const dayElemNoEntry = document.createElement("span");
-  dayElemNoEntry.dateObj = new Date(2026, 5, 16); // June 16, 2026
-  capturedConfig.onDayCreate(null, null, null, dayElemNoEntry);
-  assertEquals(dayElemNoEntry.classList.contains("has-journal-entry"), false, "Should not have has-journal-entry class");
-});
+    // Wait a tick for loadEntryDatesForMonth fetch to resolve
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
-Deno.test("verse reference and save payload include translation shorthand", { sanitizeOps: false, sanitizeResources: false }, async () => {
-  const html = `
+    // Test onDayCreate with a date that has an entry
+    const dayElemWithEntry = document.createElement("span");
+    dayElemWithEntry.dateObj = new Date(2026, 5, 15); // June 15, 2026
+    capturedConfig.onDayCreate(null, null, null, dayElemWithEntry);
+    assertEquals(
+      dayElemWithEntry.classList.contains("has-journal-entry"),
+      true,
+      "Should have has-journal-entry class",
+    );
+
+    // Test onDayCreate with a date without an entry
+    const dayElemNoEntry = document.createElement("span");
+    dayElemNoEntry.dateObj = new Date(2026, 5, 16); // June 16, 2026
+    capturedConfig.onDayCreate(null, null, null, dayElemNoEntry);
+    assertEquals(
+      dayElemNoEntry.classList.contains("has-journal-entry"),
+      false,
+      "Should not have has-journal-entry class",
+    );
+  },
+);
+
+Deno.test(
+  "verse reference and save payload include translation shorthand",
+  { sanitizeOps: false, sanitizeResources: false },
+  async () => {
+    const html = `
     <!DOCTYPE html>
     <html>
       <body>
@@ -574,95 +653,123 @@ Deno.test("verse reference and save payload include translation shorthand", { sa
     </html>
   `;
 
-  const { window, document, Node } = parseHTML(html);
+    const { window, document, Node } = parseHTML(html);
 
-  window.Node = Node;
-  window.SOAP_DATA = {
-    csrfToken: "test-token",
-    translation: "NLT"
-  };
-  window.Intl = {
-    DateTimeFormat: () => ({
-      resolvedOptions: () => ({ timeZone: "UTC" })
-    })
-  };
+    window.Node = Node;
+    window.SOAP_DATA = {
+      csrfToken: "test-token",
+      translation: "NLT",
+    };
+    window.Intl = {
+      DateTimeFormat: () => ({
+        resolvedOptions: () => ({ timeZone: "UTC" }),
+      }),
+    };
 
-  let lastPayload = null;
-  window.fetch = (url, options) => {
-    if (url === '/soap' && options.method === 'POST') {
-      lastPayload = JSON.parse(options.body);
-    }
-    return Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve({ status: "success" })
-    });
-  };
+    let lastPayload = null;
+    window.fetch = (url, options) => {
+      if (url === "/soap" && options.method === "POST") {
+        lastPayload = JSON.parse(options.body);
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ status: "success" }),
+      });
+    };
 
-  await loadApp(window);
+    await loadApp(window);
 
-  const verseSpan = document.querySelector('[data-ref="01002017"]');
-  assertExists(verseSpan, "Verse span should exist");
+    const verseSpan = document.querySelector('[data-ref="01002017"]');
+    assertExists(verseSpan, "Verse span should exist");
 
-  // Click verse to select it
-  verseSpan.dispatchEvent(new window.Event("click", { bubbles: true, cancelable: true }));
+    // Click verse to select it
+    verseSpan.dispatchEvent(new window.Event("click", { bubbles: true, cancelable: true }));
 
-  const referenceDiv = document.getElementById("selectedVersesReference");
-  assertEquals(referenceDiv.textContent, "Genesis 2:17 (NLT)", "Reference should include (NLT) translation");
+    const referenceDiv = document.getElementById("selectedVersesReference");
+    assertEquals(
+      referenceDiv.textContent,
+      "Genesis 2:17 (NLT)",
+      "Reference should include (NLT) translation",
+    );
 
-  // Wait for autosave
-  await new Promise(resolve => setTimeout(resolve, 1100));
+    // Wait for autosave
+    await new Promise((resolve) => setTimeout(resolve, 1100));
 
-  assertExists(lastPayload, "Payload should be sent");
-  assertEquals(lastPayload.translation, "NLT", "Payload should contain translation NLT");
+    assertExists(lastPayload, "Payload should be sent");
+    assertEquals(lastPayload.translation, "NLT", "Payload should contain translation NLT");
 
-  // Change translation select to MSG
-  const select = document.getElementById("translation-select");
-  const nltOpt = select.querySelector('option[value="NLT"]');
-  const msgOpt = select.querySelector('option[value="MSG"]');
-  if (nltOpt) nltOpt.removeAttribute("selected");
-  if (msgOpt) msgOpt.setAttribute("selected", "selected");
-  select.dispatchEvent(new window.Event("change", { bubbles: true, cancelable: true }));
+    // Change translation select to MSG
+    const select = document.getElementById("translation-select");
+    const nltOpt = select.querySelector('option[value="NLT"]');
+    const msgOpt = select.querySelector('option[value="MSG"]');
+    if (nltOpt) nltOpt.removeAttribute("selected");
+    if (msgOpt) msgOpt.setAttribute("selected", "selected");
+    select.dispatchEvent(new window.Event("change", { bubbles: true, cancelable: true }));
 
-  assertEquals(referenceDiv.textContent, "Genesis 2:17 (MSG)", "Reference should update to (MSG) translation");
-});
+    assertEquals(
+      referenceDiv.textContent,
+      "Genesis 2:17 (MSG)",
+      "Reference should update to (MSG) translation",
+    );
+  },
+);
 
-Deno.test("HTMX afterSettle preserves selectedVersesReference display", { sanitizeOps: false, sanitizeResources: false }, async () => {
-  const { window, document, Node } = await loadFixtureDocument();
+Deno.test(
+  "HTMX afterSettle preserves selectedVersesReference display",
+  { sanitizeOps: false, sanitizeResources: false },
+  async () => {
+    const { window, document, Node } = await loadFixtureDocument();
 
-  window.Node = Node;
-  window.SOAP_DATA = {
-    csrfToken: "test-token",
-    translation: "NLT"
-  };
-  window.Intl = {
-    DateTimeFormat: () => ({
-      resolvedOptions: () => ({ timeZone: "UTC" })
-    })
-  };
-  window.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+    window.Node = Node;
+    window.SOAP_DATA = {
+      csrfToken: "test-token",
+      translation: "NLT",
+    };
+    window.Intl = {
+      DateTimeFormat: () => ({
+        resolvedOptions: () => ({ timeZone: "UTC" }),
+      }),
+    };
+    window.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
 
-  await loadApp(window);
+    await loadApp(window);
 
-  const referenceDiv = document.getElementById("selectedVersesReference");
-  assertExists(referenceDiv, "Reference div should exist");
+    const referenceDiv = document.getElementById("selectedVersesReference");
+    assertExists(referenceDiv, "Reference div should exist");
 
-  // Verify that the template rendered style="display: block;" because selectedVerses has items
-  assertEquals(referenceDiv.style.display, "block", "Template should render display: block when selectedVerses is populated");
+    // Verify that the template rendered style="display: block;" because selectedVerses has items
+    assertEquals(
+      referenceDiv.style.display,
+      "block",
+      "Template should render display: block when selectedVerses is populated",
+    );
 
-  // Simulate HTMX settle wiping the inline style (as happened during attribute settling)
-  referenceDiv.style.display = "";
+    // Simulate HTMX settle wiping the inline style (as happened during attribute settling)
+    referenceDiv.style.display = "";
 
-  // Dispatch htmx:afterSettle event
-  const container = document.getElementById("content-container");
-  const settleEvent = new window.Event("htmx:afterSettle", { bubbles: true, cancelable: true });
-  container.dispatchEvent(settleEvent);
+    // Dispatch htmx:afterSettle event
+    const container = document.getElementById("content-container");
+    const settleEvent = new window.Event("htmx:afterSettle", { bubbles: true, cancelable: true });
+    container.dispatchEvent(settleEvent);
 
-  assertEquals(referenceDiv.textContent, "Genesis 2:17 (NLT)", "Reference text should be updated");
-  assertEquals(referenceDiv.style.display, "block", "Reference display should be block after settle");
-});
+    assertEquals(
+      referenceDiv.textContent,
+      "Genesis 2:17 (NLT)",
+      "Reference text should be updated",
+    );
+    assertEquals(
+      referenceDiv.style.display,
+      "block",
+      "Reference display should be block after settle",
+    );
+  },
+);
 
-Deno.test("clearing journal entry removes date from cachedEntryDates and redraws flatpickr", { sanitizeOps: false, sanitizeResources: false }, async () => {
-  const html = `
+Deno.test(
+  "clearing journal entry removes date from cachedEntryDates and redraws flatpickr",
+  { sanitizeOps: false, sanitizeResources: false },
+  async () => {
+    const html = `
     <!DOCTYPE html>
     <html>
       <body>
@@ -678,65 +785,73 @@ Deno.test("clearing journal entry removes date from cachedEntryDates and redraws
     </html>
   `;
 
-  const { window, document, Node } = parseHTML(html);
+    const { window, document, Node } = parseHTML(html);
 
-  window.Node = Node;
-  window.SOAP_DATA = {
-    csrfToken: "test-token"
-  };
-  window.Intl = {
-    DateTimeFormat: () => ({
-      resolvedOptions: () => ({ timeZone: "UTC" })
-    })
-  };
-
-  window.fetch = (url, options) => {
-    if (typeof url === 'string' && url.includes('/soap/dates')) {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ dates: ["2026-06-20"] })
-      });
-    }
-    return Promise.resolve({ ok: true, json: () => Promise.resolve({ status: "success" }) });
-  };
-
-  let capturedConfig = null;
-  let redrawCount = 0;
-  window.flatpickr = (element, config) => {
-    capturedConfig = config;
-    return {
-      redraw: () => { redrawCount++; },
-      destroy: () => {}
+    window.Node = Node;
+    window.SOAP_DATA = {
+      csrfToken: "test-token",
     };
-  };
+    window.Intl = {
+      DateTimeFormat: () => ({
+        resolvedOptions: () => ({ timeZone: "UTC" }),
+      }),
+    };
 
-  await loadApp(window);
+    window.fetch = (url) => {
+      if (typeof url === "string" && url.includes("/soap/dates")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ dates: ["2026-06-20"] }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ status: "success" }) });
+    };
 
-  // Wait for initial loadEntryDatesForMonth
-  await new Promise((resolve) => setTimeout(resolve, 50));
+    let capturedConfig = null;
+    let redrawCount = 0;
+    window.flatpickr = (element, config) => {
+      capturedConfig = config;
+      return {
+        redraw: () => {
+          redrawCount++;
+        },
+        destroy: () => {},
+      };
+    };
 
-  // Verify initial state has entry for 2026-06-20
-  const dayElem = document.createElement("span");
-  dayElem.dateObj = new Date(2026, 5, 20); // June 20, 2026
-  capturedConfig.onDayCreate(null, null, null, dayElem);
-  assertEquals(dayElem.classList.contains("has-journal-entry"), true, "Should initially have has-journal-entry class");
+    await loadApp(window);
 
-  // Trigger input event with empty observation (clearing/blanking out entry)
-  const obsTextarea = document.getElementById("observation");
-  obsTextarea.value = "";
-  obsTextarea.dispatchEvent(new window.Event("input", { bubbles: true, cancelable: true }));
+    // Wait for initial loadEntryDatesForMonth
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
-  // Wait for SAVE_DELAY (1000ms) + fetch resolution
-  await new Promise((resolve) => setTimeout(resolve, 1100));
+    // Verify initial state has entry for 2026-06-20
+    const dayElem = document.createElement("span");
+    dayElem.dateObj = new Date(2026, 5, 20); // June 20, 2026
+    capturedConfig.onDayCreate(null, null, null, dayElem);
+    assertEquals(
+      dayElem.classList.contains("has-journal-entry"),
+      true,
+      "Should initially have has-journal-entry class",
+    );
 
-  assertEquals(redrawCount > 0, true, "fpInstance.redraw() should have been called");
+    // Trigger input event with empty observation (clearing/blanking out entry)
+    const obsTextarea = document.getElementById("observation");
+    obsTextarea.value = "";
+    obsTextarea.dispatchEvent(new window.Event("input", { bubbles: true, cancelable: true }));
 
-  // Verify that onDayCreate now reports NO entry for 2026-06-20
-  const dayElemAfterClear = document.createElement("span");
-  dayElemAfterClear.dateObj = new Date(2026, 5, 20);
-  capturedConfig.onDayCreate(null, null, null, dayElemAfterClear);
-  assertEquals(dayElemAfterClear.classList.contains("has-journal-entry"), false, "Should no longer have has-journal-entry class after clearing entry");
-});
+    // Wait for SAVE_DELAY (1000ms) + fetch resolution
+    await new Promise((resolve) => setTimeout(resolve, 1100));
 
+    assertEquals(redrawCount > 0, true, "fpInstance.redraw() should have been called");
 
-
+    // Verify that onDayCreate now reports NO entry for 2026-06-20
+    const dayElemAfterClear = document.createElement("span");
+    dayElemAfterClear.dateObj = new Date(2026, 5, 20);
+    capturedConfig.onDayCreate(null, null, null, dayElemAfterClear);
+    assertEquals(
+      dayElemAfterClear.classList.contains("has-journal-entry"),
+      false,
+      "Should no longer have has-journal-entry class after clearing entry",
+    );
+  },
+);

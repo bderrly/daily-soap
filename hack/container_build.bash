@@ -15,9 +15,10 @@ set -eu
 #   - GAR_REPO
 #   - GAR_PKG
 if [[ ! -f .container_build.env ]]; then
-    >&2 echo ".container_build.env file not found, will not proceed"
-    exit 1
+	>&2 echo ".container_build.env file not found, will not proceed"
+	exit 1
 fi
+# shellcheck source=/dev/null
 source .container_build.env
 
 VERSION=${VERSION:=latest}
@@ -25,10 +26,10 @@ VERSION=${VERSION:=latest}
 # Container label
 FULL_LABEL="${GAR_URL}/${GAR_PROJECT}/${GAR_REPO}/${GAR_PKG}:${VERSION}"
 
-podman build -t "${FULL_LABEL}" .
+podman build -t "$FULL_LABEL" .
 
 shopt -s nocasematch
 if [[ ${PUSH_CONTAINER:-false} =~ ^(t(rue)?|y(es)?)$ ]]; then
-    podman push "${FULL_LABEL}"
+	podman push "$FULL_LABEL"
 fi
 shopt -u nocasematch

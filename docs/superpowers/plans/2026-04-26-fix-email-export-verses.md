@@ -5,6 +5,7 @@
 **Goal:** Ensure that the email export only contains the verses selected by the user, if any. If no verses are selected, fall back to the full daily scripture.
 
 **Architecture:**
+
 - Implement `FormatReferences(verseIDs []string) string` in `internal/esv/reference.go` to convert 8-digit verse IDs to a single reference string.
 - Update `internal/server/server.go:handleExport` to use the selected verses if available.
 

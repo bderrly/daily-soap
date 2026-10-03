@@ -8,16 +8,18 @@ Users currently cannot easily share or download their SOAP journal entries. Addi
 - **New API Endpoint**: A `/export` endpoint in the server to process export requests, supporting format selection (HTML, Markdown) and delivery method (Download, Email).
 - **Email Integration**: Enhanced `internal/email` client to support sending exported journal entries as formatted emails.
 - **Frontend UI Enhancements**:
-    - A "Share" button on the main journal page.
-    - An interactive "Export Modal" allowing users to choose their preferred format and action.
-    - Client-side logic to handle downloads and email submission via the new API.
+  - A "Share" button on the main journal page.
+  - An interactive "Export Modal" allowing users to choose their preferred format and action.
+  - Client-side logic to handle downloads and email submission via the new API.
 
 ## Capabilities
 
 ### New Capabilities
+
 - `soap-export`: Ability to export SOAP journal entries for a specific date in HTML or Markdown format, with options to download the file directly or send it via email.
 
 ### Modified Capabilities
+
 <!-- Existing capabilities whose REQUIREMENTS are changing (not just implementation).
      Only list here if spec-level behavior changes. Each needs a delta spec file.
      Use existing spec names from openspec/specs/. Leave empty if no requirement changes. -->

@@ -16,7 +16,7 @@
                 </select>
             </div>
         </div>
-        {{if .esvData.Passages}}
+        {{- if .esvData.Passages}}
         <div class="passages">
             {{- range .esvData.Passages}}
             <div class="verse-content">
@@ -27,8 +27,8 @@
                 {{.esvData.Copyright}}
             </div>
         </div>
-        {{end}}
-        {{if .fumsTokens}}
+        {{- end}}
+        {{- if .fumsTokens}}
         <script nonce="{{.Nonce}}">
             (function() {
                 var tokens = {{.fumsTokens | toJSON}};
@@ -44,7 +44,7 @@
                 }
             })();
         </script>
-        {{end}}
+        {{- end}}
     </div>
 </div>
 {{end}}

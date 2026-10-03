@@ -13,10 +13,12 @@
 ### Task 1: Database Migration
 
 **Files:**
+
 - Create: `internal/migrations/20260425000000_add_queued_emails.sql`
 
 - [ ] **Step 1: Create the migration file**
-Create the file with the following schema:
+      Create the file with the following schema:
+
 ```sql
 CREATE TABLE queued_emails (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,6 +38,7 @@ CREATE INDEX idx_queued_emails_status_next_attempt ON queued_emails(status, next
 ```
 
 - [ ] **Step 2: Commit**
+
 ```bash
 git add internal/migrations/20260425000000_add_queued_emails.sql
 git commit -m "db: add queued_emails table for export retries"
@@ -46,12 +49,14 @@ git commit -m "db: add queued_emails table for export retries"
 ### Task 2: Store Interface & SQLite Implementation
 
 **Files:**
+
 - Modify: `internal/store/store.go`
 - Modify: `internal/store/sqlite/sqlite.go`
 - Test: `internal/store/sqlite/sqlite_test.go`
 
 - [ ] **Step 1: Update `internal/store/store.go`**
-Add the `QueuedEmail` struct and methods to the `Store` interface:
+      Add the `QueuedEmail` struct and methods to the `Store` interface:
+
 ```go
 type QueuedEmail struct {
     ID            int64
@@ -73,12 +78,13 @@ MarkEmailSent(ctx context.Context, id int64) error
 ```
 
 - [ ] **Step 2: Implement methods in `internal/store/sqlite/sqlite.go`**
-Implement the SQL queries for queuing, retrieving, and updating email tasks.
+      Implement the SQL queries for queuing, retrieving, and updating email tasks.
 
 - [ ] **Step 3: Write tests in `internal/store/sqlite/sqlite_test.go`**
-Verify that `QueueEmail` saves data and `GetPendingEmails` retrieves it correctly based on `next_attempt_at`.
+      Verify that `QueueEmail` saves data and `GetPendingEmails` retrieves it correctly based on `next_attempt_at`.
 
 - [ ] **Step 4: Commit**
+
 ```bash
 git add internal/store/store.go internal/store/sqlite/sqlite.go internal/store/sqlite/sqlite_test.go
 git commit -m "store: implement queued_emails persistence"
@@ -89,12 +95,14 @@ git commit -m "store: implement queued_emails persistence"
 ### Task 3: Email Templates & Worker Logic
 
 **Files:**
+
 - Create: `internal/email/template.go`
 - Create: `internal/email/worker.go`
 - Modify: `internal/email/email.go`
 
 - [ ] **Step 1: Create `internal/email/template.go`**
-Define a template that uses inline CSS for the SOAP export.
+      Define a template that uses inline CSS for the SOAP export.
+
 ```go
 const ExportEmailTemplate = `
 <div style="font-family: sans-serif; line-height: 1.6; max-width: 600px; margin: 0 auto; border: 1px solid #eee; padding: 20px;">
@@ -121,12 +129,13 @@ const ExportEmailTemplate = `
 ```
 
 - [ ] **Step 2: Implement `internal/email/worker.go`**
-Implement `StartWorker(ctx context.Context, s store.Store, client *Client)`. Use a `time.Ticker` to poll `GetPendingEmails` every minute and call `client.send` for each.
+      Implement `StartWorker(ctx context.Context, s store.Store, client *Client)`. Use a `time.Ticker` to poll `GetPendingEmails` every minute and call `client.send` for each.
 
 - [ ] **Step 3: Update `internal/email/email.go`**
-Add `QueueExportEmail(ctx context.Context, s store.Store, user *store.User, date string, recipients []string, body string) error`. It should create one `QueuedEmail` record per recipient.
+      Add `QueueExportEmail(ctx context.Context, s store.Store, user *store.User, date string, recipients []string, body string) error`. It should create one `QueuedEmail` record per recipient.
 
 - [ ] **Step 4: Commit**
+
 ```bash
 git add internal/email/
 git commit -m "email: implement background worker and inline templates"
@@ -137,16 +146,18 @@ git commit -m "email: implement background worker and inline templates"
 ### Task 4: Server Integration (API Handler)
 
 **Files:**
+
 - Modify: `internal/server/server.go`
 
 - [ ] **Step 1: Implement `handleExport`**
-Extract `date`, `format`, `method`, and `recipients` from JSON body. Fetch SOAP data and Scripture. Generate content using `internal/export`. If method is `download`, return file. If `email`, call `email.QueueExportEmail`.
+      Extract `date`, `format`, `method`, and `recipients` from JSON body. Fetch SOAP data and Scripture. Generate content using `internal/export`. If method is `download`, return file. If `email`, call `email.QueueExportEmail`.
 
 - [ ] **Step 2: Register route and Start Worker**
-In `Muxer()`, add `mux.HandleFunc("/export", authMiddleware(handleExport))`.
-In `InitDB()`, call `go email.StartWorker(ctx, appStore, emailClient)`.
+      In `Muxer()`, add `mux.HandleFunc("/export", authMiddleware(handleExport))`.
+      In `InitDB()`, call `go email.StartWorker(ctx, appStore, emailClient)`.
 
 - [ ] **Step 3: Commit**
+
 ```bash
 git add internal/server/server.go
 git commit -m "server: add /export endpoint and start email worker"
@@ -157,20 +168,22 @@ git commit -m "server: add /export endpoint and start email worker"
 ### Task 5: Frontend UI
 
 **Files:**
+
 - Modify: `internal/server/web/index.html`
 - Modify: `internal/server/web/style.css`
 - Modify: `internal/server/web/app.js`
 
 - [ ] **Step 1: Add Share Button and Modal to `index.html`**
-Add a "Share" button next to the SOAP form. Add a `<dialog>` or `<div>` for the modal with inputs for format and a comma-separated list of emails.
+      Add a "Share" button next to the SOAP form. Add a `<dialog>` or `<div>` for the modal with inputs for format and a comma-separated list of emails.
 
 - [ ] **Step 2: Style the modal in `style.css`**
-Add styles for the modal overlay, container, and form elements.
+      Add styles for the modal overlay, container, and form elements.
 
 - [ ] **Step 3: Implement interaction in `app.js`**
-Handle click on Share button to open modal. On "Export" click, send `POST /export` with the selected options. Show a toast/message for success or failure.
+      Handle click on Share button to open modal. On "Export" click, send `POST /export` with the selected options. Show a toast/message for success or failure.
 
 - [ ] **Step 4: Commit**
+
 ```bash
 git add internal/server/web/
 git commit -m "ui: add share modal and export integration"

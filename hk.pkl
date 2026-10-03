@@ -1,0 +1,45 @@
+amends "package://github.com/jdx/hk/releases/download/v2.4.0/hk@2.4.0#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.4.0/hk@2.4.0#/Builtins.pkl"
+// Using a coding agent? See https://hk.jdx.dev/agents
+
+exclude = List("**/*.min.css", "**/*.min.js", "internal/dailytexts/texts/*")
+
+// hooks {
+//   ["pre-commit"] {
+//     fix = true
+//     stash = "git"
+//     stage = false
+//     fail_on_fix = true
+//     steps = linters
+//   }
+// }
+
+steps {
+  ["trailing_whitespace"] = Builtins.trailing_whitespace
+  ["newlines"] = Builtins.newlines
+  ["check_added_large_files"] = Builtins.check_added_large_files
+  ["mise"] = Builtins.mise
+
+  // Secret detection
+  ["betterleaks"] = Builtins.betterleaks
+
+  // Containers
+  // ["droast"] = Builtins.droast
+
+  // JavaScript
+  ["oxlint"] = Builtins.ox_lint
+  ["oxfmt"] = (Builtins.oxfmt) {
+    depends = "oxlint"
+  }
+
+  // Go
+  ["go_fmt"] = Builtins.go_fmt
+  ["golangci_lint"] = Builtins.golangci_lint
+  ["golangci_lint_fmt"] = Builtins.golangci_lint_fmt
+  ["gomod_tidy"] = Builtins.gomod_tidy
+
+  // Shell
+  ["shellcheck"] = Builtins.shellcheck
+  ["shellharden"] = Builtins.shellharden
+  ["shfmt"] = Builtins.shfmt
+}
