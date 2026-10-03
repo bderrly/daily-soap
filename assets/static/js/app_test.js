@@ -661,4 +661,82 @@ Deno.test("HTMX afterSettle preserves selectedVersesReference display", { saniti
   assertEquals(referenceDiv.style.display, "block", "Reference display should be block after settle");
 });
 
+Deno.test("clearing journal entry removes date from cachedEntryDates and redraws flatpickr", { sanitizeOps: false, sanitizeResources: false }, async () => {
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <body>
+        <div class="content-wrapper" id="content-container" data-date="2026-06-20" data-selected-verses="[]">
+          <div id="selectedVersesReference"></div>
+          <textarea id="observation"></textarea>
+          <textarea id="application"></textarea>
+          <textarea id="prayer"></textarea>
+          <div id="saveStatus"></div>
+          <input type="text" id="date-picker" value="2026-06-20">
+        </div>
+      </body>
+    </html>
+  `;
+
+  const { window, document, Node } = parseHTML(html);
+
+  window.Node = Node;
+  window.SOAP_DATA = {
+    csrfToken: "test-token"
+  };
+  window.Intl = {
+    DateTimeFormat: () => ({
+      resolvedOptions: () => ({ timeZone: "UTC" })
+    })
+  };
+
+  window.fetch = (url, options) => {
+    if (typeof url === 'string' && url.includes('/soap/dates')) {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ dates: ["2026-06-20"] })
+      });
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({ status: "success" }) });
+  };
+
+  let capturedConfig = null;
+  let redrawCount = 0;
+  window.flatpickr = (element, config) => {
+    capturedConfig = config;
+    return {
+      redraw: () => { redrawCount++; },
+      destroy: () => {}
+    };
+  };
+
+  await loadApp(window);
+
+  // Wait for initial loadEntryDatesForMonth
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  // Verify initial state has entry for 2026-06-20
+  const dayElem = document.createElement("span");
+  dayElem.dateObj = new Date(2026, 5, 20); // June 20, 2026
+  capturedConfig.onDayCreate(null, null, null, dayElem);
+  assertEquals(dayElem.classList.contains("has-journal-entry"), true, "Should initially have has-journal-entry class");
+
+  // Trigger input event with empty observation (clearing/blanking out entry)
+  const obsTextarea = document.getElementById("observation");
+  obsTextarea.value = "";
+  obsTextarea.dispatchEvent(new window.Event("input", { bubbles: true, cancelable: true }));
+
+  // Wait for SAVE_DELAY (1000ms) + fetch resolution
+  await new Promise((resolve) => setTimeout(resolve, 1100));
+
+  assertEquals(redrawCount > 0, true, "fpInstance.redraw() should have been called");
+
+  // Verify that onDayCreate now reports NO entry for 2026-06-20
+  const dayElemAfterClear = document.createElement("span");
+  dayElemAfterClear.dateObj = new Date(2026, 5, 20);
+  capturedConfig.onDayCreate(null, null, null, dayElemAfterClear);
+  assertEquals(dayElemAfterClear.classList.contains("has-journal-entry"), false, "Should no longer have has-journal-entry class after clearing entry");
+});
+
+
 

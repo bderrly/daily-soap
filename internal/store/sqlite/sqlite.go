@@ -174,6 +174,14 @@ func (s *Store) GetSOAPDatesWithEntries(ctx context.Context, userID int64, start
 
 // SaveSOAPData saves SOAP data to the database.
 func (s *Store) SaveSOAPData(ctx context.Context, userID int64, soapData *store.SOAPData) error {
+	if soapData.IsEmpty() {
+		_, err := s.db.ExecContext(ctx, "DELETE FROM journal WHERE user_id = ? AND date = ?", userID, soapData.Date)
+		if err != nil {
+			return fmt.Errorf("deleting empty SOAP data: %w", err)
+		}
+		return nil
+	}
+
 	verses := soapData.SelectedVerses
 	if verses == nil {
 		verses = []string{}

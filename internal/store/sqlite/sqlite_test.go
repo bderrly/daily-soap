@@ -232,6 +232,86 @@ func TestStore_SaveSOAPData(t *testing.T) {
 	}
 }
 
+func TestStore_SaveSOAPData_Empty(t *testing.T) {
+	db := setupTestDB(t)
+	s := New(db)
+	ctx := context.Background()
+
+	_, err := db.Exec("INSERT INTO users (id, email, password_hash, verified_at) VALUES (1, 'test@example.com', 'hash', CURRENT_TIMESTAMP)")
+	if err != nil {
+		t.Fatalf("failed to insert user: %v", err)
+	}
+
+	// 1. Saving empty data when no entry exists should not insert anything
+	emptyData := &store.SOAPData{
+		Date:           "2026-10-02",
+		Observation:    "",
+		Application:    "   ",
+		Prayer:         "",
+		SelectedVerses: []string{},
+		Translation:    "ESV",
+	}
+	if err := s.SaveSOAPData(ctx, 1, emptyData); err != nil {
+		t.Fatalf("expected no error saving empty data: %v", err)
+	}
+
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM journal WHERE user_id = 1 AND date = '2026-10-02'").Scan(&count); err != nil {
+		t.Fatalf("failed to query journal count: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected 0 entries in journal, got %d", count)
+	}
+
+	// 2. Insert a non-empty entry
+	validData := &store.SOAPData{
+		Date:           "2026-10-02",
+		Observation:    "Something observed",
+		Application:    "Something applied",
+		Prayer:         "A prayer",
+		SelectedVerses: []string{"Gen 1:1"},
+		Translation:    "ESV",
+	}
+	if err := s.SaveSOAPData(ctx, 1, validData); err != nil {
+		t.Fatalf("expected no error saving valid data: %v", err)
+	}
+
+	if err := db.QueryRow("SELECT COUNT(*) FROM journal WHERE user_id = 1 AND date = '2026-10-02'").Scan(&count); err != nil {
+		t.Fatalf("failed to query journal count: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected 1 entry in journal, got %d", count)
+	}
+
+	rangeEntries, err := s.GetSOAPDataRange(ctx, 1, "2026-10-01", "2026-10-03")
+	if err != nil {
+		t.Fatalf("failed to get soap data range: %v", err)
+	}
+	if len(rangeEntries) != 1 {
+		t.Fatalf("expected 1 entry in range, got %d", len(rangeEntries))
+	}
+
+	// 3. Clear the entry by saving empty data
+	if err := s.SaveSOAPData(ctx, 1, emptyData); err != nil {
+		t.Fatalf("expected no error saving cleared data: %v", err)
+	}
+
+	if err := db.QueryRow("SELECT COUNT(*) FROM journal WHERE user_id = 1 AND date = '2026-10-02'").Scan(&count); err != nil {
+		t.Fatalf("failed to query journal count: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected 0 entries in journal after clearing, got %d", count)
+	}
+
+	rangeEntries, err = s.GetSOAPDataRange(ctx, 1, "2026-10-01", "2026-10-03")
+	if err != nil {
+		t.Fatalf("failed to get soap data range: %v", err)
+	}
+	if len(rangeEntries) != 0 {
+		t.Fatalf("expected 0 entries in range after clearing, got %d", len(rangeEntries))
+	}
+}
+
 func TestStore_GetSOAPDatesWithEntries(t *testing.T) {
 	db := setupTestDB(t)
 	s := New(db)

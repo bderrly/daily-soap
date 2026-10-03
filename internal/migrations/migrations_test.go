@@ -166,3 +166,67 @@ func TestBackfill(t *testing.T) {
 		t.Errorf("expected verified_at to be NULL for unverified user, got %v", *unverifiedVerifiedAt)
 	}
 }
+
+func TestRemoveEmptyJournalEntriesMigration(t *testing.T) {
+	db, err := sql.Open("sqlite3", "file::memory:?cache=shared&_foreign_keys=on")
+	if err != nil {
+		t.Fatalf("failed to open in-memory db: %v", err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+
+	goose.SetBaseFS(testEmbedMigrations)
+	if err := goose.SetDialect("sqlite3"); err != nil {
+		t.Fatalf("failed to set dialect: %v", err)
+	}
+
+	// Run up to the previous migration (20260920000000)
+	if err := goose.UpToContext(ctx, db, ".", 20260920000000); err != nil {
+		t.Fatalf("failed to migrate to 20260920000000: %v", err)
+	}
+
+	// Insert a user
+	_, err = db.ExecContext(ctx, `
+		INSERT INTO users (id, email, password_hash, verification_token, timezone, verified_at)
+		VALUES (1, 'user@example.com', 'hash', 'token1', 'UTC', CURRENT_TIMESTAMP)
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert user: %v", err)
+	}
+
+	// Insert an empty journal entry and a non-empty journal entry
+	_, err = db.ExecContext(ctx, `
+		INSERT INTO journal (user_id, date, observation, application, prayer, selected_verses, translation)
+		VALUES
+			(1, '2026-10-02', '', '   ', '', '[]', 'NLT'),
+			(1, '2026-10-03', 'Obs', 'App', 'Pry', '["Gen 1:1"]', 'ESV')
+	`)
+	if err != nil {
+		t.Fatalf("failed to insert test journal entries: %v", err)
+	}
+
+	// Run all remaining migrations (which includes 20261003000000)
+	if err := goose.UpContext(ctx, db, "."); err != nil {
+		t.Fatalf("failed to run remaining migrations: %v", err)
+	}
+
+	// Verify empty entry was deleted
+	var count int
+	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM journal WHERE date = '2026-10-02'").Scan(&count)
+	if err != nil {
+		t.Fatalf("failed to count empty entries: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("expected 0 entries for 2026-10-02, got %d", count)
+	}
+
+	// Verify non-empty entry remains
+	err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM journal WHERE date = '2026-10-03'").Scan(&count)
+	if err != nil {
+		t.Fatalf("failed to count non-empty entries: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("expected 1 entry for 2026-10-03, got %d", count)
+	}
+}

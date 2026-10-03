@@ -3,6 +3,7 @@ package store
 
 import (
 	"context"
+	"strings"
 	"time"
 )
 
@@ -43,6 +44,18 @@ type SOAPData struct {
 	Prayer         string   `json:"prayer"`
 	SelectedVerses []string `json:"selectedVerses"`
 	Translation    string   `json:"translation"`
+}
+
+// IsEmpty reports whether the journal entry contains no user-written content
+// (no selected verses and only whitespace or empty text in observation, application, and prayer).
+func (d *SOAPData) IsEmpty() bool {
+	if d == nil {
+		return true
+	}
+	return strings.TrimSpace(d.Observation) == "" &&
+		strings.TrimSpace(d.Application) == "" &&
+		strings.TrimSpace(d.Prayer) == "" &&
+		len(d.SelectedVerses) == 0
 }
 
 // AdminStats contains aggregated metrics for user administration.

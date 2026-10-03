@@ -554,8 +554,12 @@ function saveData(immediate = false) {
                     (applicationField?.value.trim() || '') !== '' ||
                     (prayerField?.value.trim() || '') !== '' ||
                     selectedVerseIds.length > 0;
-                if (hasContent && currentDate) {
-                    cachedEntryDates.add(currentDate);
+                if (currentDate) {
+                    if (hasContent) {
+                        cachedEntryDates.add(currentDate);
+                    } else {
+                        cachedEntryDates.delete(currentDate);
+                    }
                     if (fpInstance) {
                         fpInstance.redraw();
                     }
